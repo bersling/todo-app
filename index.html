@@ -145,7 +145,7 @@
     <kbd>a</kbd><span>add</span>
     <kbd>e ↵</kbd><span>edit</span>
     <kbd>t</kbd><span>flag for today</span>
-    <kbd>d space</kbd><span>done</span>
+    <kbd>d</kbd><span>done</span>
     <kbd>r</kbd><span>refresh</span>
     <kbd>o</kbd><span>open the sheet</span>
     <kbd>esc</kbd><span>leave the add box, clear selection</span>
@@ -442,7 +442,7 @@
       case "a": newEl.focus(); break;
       case "e": case "Enter": if (sel) startEdit(sel, rowEl(sel), rowEl(sel).querySelector(".txt")); break;
       case "t": if (sel) toggleToday(sel); break;
-      case "d": case " ": if (sel) complete(sel); break;
+      case "d": if (sel) complete(sel); break;
       case "r": refresh(); break;
       case "o": window.open(SHEET, "_blank"); break;
       case "?": helpEl.hidden = !helpEl.hidden; break;
