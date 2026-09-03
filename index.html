@@ -93,7 +93,17 @@
   // knowledge; the token (entered once, kept in localStorage) is the secret.
   var API = "https://script.google.com/macros/s/AKfycbwzJUdYPXPQaN4yeseF6w07p1tmRIrEBe1ipIoFmqCaDsATLD3qh6hrEbL-lGexsHoAoQ/exec";
 
-  var token = null, tabs = {}, current = null;
+  // Apps Script takes seconds per call, so the page never waits on it:
+  // the last known list + tab are painted from localStorage on open, and
+  // writes go through an outbox that is replayed on the next open if the
+  // app got closed before Google answered.
+  var store = {
+    get: function (k, d) { try { return JSON.parse(localStorage.getItem(k)) || d; } catch (e) { return d; } },
+    set: function (k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+  };
+
+  var token = null, tabs = store.get("todo-cache", {}), current = store.get("todo-tab", null);
+  var outbox = store.get("todo-outbox", []), sending = false;
 
   try {
     var fromUrl = new URLSearchParams(location.search).get("key");
@@ -122,11 +132,58 @@
   function write(params) {
     var body = new URLSearchParams(params);
     body.set("token", token);
-    return fetch(API, { method: "POST", body: body })
+    return fetch(API, { method: "POST", body: body, keepalive: true })
       .then(function (r) { return r.json(); })
       .then(function (res) {
         if (!res.ok) throw new Error(res.error);
       });
+  }
+
+  // Queue a write and start draining. Each op is retried until it succeeds or
+  // the server rejects it for a reason other than being unreachable.
+  function enqueue(op) {
+    outbox.push(op);
+    store.set("todo-outbox", outbox);
+    drain();
+  }
+
+  function drain() {
+    if (sending || !outbox.length || !token) return;
+    sending = true;
+    var op = outbox[0];
+    write(op).then(function () {
+      outbox.shift();
+    }).catch(function (err) {
+      var msg = String(err.message || err);
+      if (msg.indexOf("bad token") >= 0) return fail(err);
+      // "not found" etc: the server saw it and said no, drop it; network
+      // errors keep it for the next attempt
+      if (err instanceof TypeError) return;
+      outbox.shift();
+      showErr(msg);
+    }).then(function () {
+      store.set("todo-outbox", outbox);
+      sending = false;
+      if (outbox.length) setTimeout(drain, 3000);
+    });
+  }
+
+  // Fresh data from the server is missing whatever is still in the outbox.
+  function applyOutbox(fresh) {
+    outbox.forEach(function (op) {
+      var items = fresh[op.tab];
+      if (!items) return;
+      if (op.action === "add") items.push([null, op.text]);
+      if (op.action === "done") {
+        var i = items.findIndex(function (x) { return x[1] === op.text; });
+        if (i >= 0) items.splice(i, 1);
+      }
+    });
+    return fresh;
+  }
+
+  function showErr(msg) {
+    listEl.insertAdjacentHTML("afterbegin", '<div id="err">' + msg + "</div>");
   }
 
   function fail(err) {
@@ -134,19 +191,23 @@
       try { localStorage.removeItem("todo-token"); } catch (e) {}
       token = null; boot(); return;
     }
-    listEl.insertAdjacentHTML("afterbegin",
-      '<div id="err">' + String(err.message || err) + "</div>");
-    refresh();
+    showErr(String(err.message || err));
   }
 
   function refresh() {
-    list().then(render).catch(fail);
+    list().then(function (fresh) {
+      fresh = applyOutbox(fresh);
+      if (JSON.stringify(fresh) !== JSON.stringify(tabs)) render(fresh);
+      drain();
+    }).catch(fail);
   }
 
   function render(fresh) {
     if (fresh) tabs = fresh;
+    store.set("todo-cache", tabs);
     var names = Object.keys(tabs);
     if (current === null || names.indexOf(current) < 0) current = names[0] || null;
+    store.set("todo-tab", current);
     tabsEl.innerHTML = "";
     names.forEach(function (n) {
       var b = document.createElement("button");
@@ -168,7 +229,7 @@
         row.classList.add("out");
         tabs[current] = tabs[current].filter(function (x) { return x !== it; });
         setTimeout(render, 150);
-        write({ action: "done", tab: current, text: text }).catch(fail);
+        enqueue({ action: "done", tab: current, text: text });
       };
       var span = document.createElement("span");
       span.className = "txt";
@@ -185,7 +246,7 @@
     newEl.value = "";
     tabs[current] = (tabs[current] || []).concat([[null, text]]);
     render();
-    write({ action: "add", tab: current, text: text }).catch(fail);
+    enqueue({ action: "add", tab: current, text: text });
   };
 
   tokform.onsubmit = function (ev) {
@@ -199,16 +260,17 @@
   function boot() {
     tokform.hidden = !!token;
     app.hidden = !token;
-    if (token) {
-      listEl.innerHTML = '<div id="empty">loading…</div>';
-      refresh();
-    }
+    if (!token) return;
+    if (Object.keys(tabs).length) { render(); newEl.focus(); }
+    else listEl.innerHTML = '<div id="empty">loading…</div>';
+    drain();
+    refresh();
   }
   boot();
 
   // refresh when the app is brought back to the foreground
   document.addEventListener("visibilitychange", function () {
-    if (!document.hidden && token) refresh();
+    if (!document.hidden && token) { drain(); refresh(); }
   });
 </script>
 </body>
