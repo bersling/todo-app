@@ -46,6 +46,7 @@
   }
   .item.out { opacity: 0.25; }
   .item.editing { border-color: var(--accent); }
+  .txt:focus { outline: none; }
   .item.today { border-color: var(--accent); }
   .item.today .txt { font-weight: 600; }
   .star {
@@ -57,7 +58,7 @@
     flex: none; width: 24px; height: 24px; border-radius: 50%;
     border: 2px solid var(--muted); background: none; padding: 0;
   }
-  .txt { overflow-wrap: anywhere; }
+  .txt { flex: 1; overflow-wrap: anywhere; white-space: pre-wrap; }
   #empty, #err { color: var(--muted); text-align: center; padding: 24px 0; }
   #err { color: #c0564f; }
   #bar {
@@ -73,7 +74,6 @@
     font: inherit; border: 0; border-radius: 10px; padding: 10px 16px;
     background: var(--accent); color: #fff;
   }
-  #cancel { background: var(--line) !important; color: var(--muted) !important; }
   #tokform { padding: 40px 20px; display: flex; flex-direction: column; gap: 10px; }
   #tokform input {
     font: inherit; padding: 10px 12px; border-radius: 10px;
@@ -88,7 +88,6 @@
   <div id="list"></div>
   <form id="bar">
     <input id="new" placeholder="Add a todo…" autocomplete="off">
-    <button id="cancel" type="button" hidden>✕</button>
     <button id="go">Add</button>
   </form>
 </div>
@@ -114,7 +113,7 @@
 
   var token = null, tabs = store.get("todo-cache", {}), current = store.get("todo-tab", null);
   var outbox = store.get("todo-outbox", []), sending = false;
-  var editing = null;  // item currently loaded into the input, or null
+  var editing = null;  // item being edited in place, or null
 
   try {
     var fromUrl = new URLSearchParams(location.search).get("key");
@@ -129,9 +128,7 @@
       tokform = document.getElementById("tokform"),
       tabsEl = document.getElementById("tabs"),
       listEl = document.getElementById("list"),
-      newEl = document.getElementById("new"),
-      goEl = document.getElementById("go"),
-      cancelEl = document.getElementById("cancel");
+      newEl = document.getElementById("new");
 
   function list() {
     return fetch(API + "?token=" + encodeURIComponent(token))
@@ -210,6 +207,7 @@
   function refresh() {
     list().then(function (fresh) {
       fresh = applyOutbox(fresh);
+      if (editing) return;  // don't repaint under an open edit; next refresh catches up
       if (JSON.stringify(fresh) !== JSON.stringify(tabs)) render(fresh);
       drain();
     }).catch(fail);
@@ -226,7 +224,7 @@
       var b = document.createElement("button");
       b.textContent = n;
       b.className = n === current ? "on" : "";
-      b.onclick = function () { current = n; stopEdit(); render(); };
+      b.onclick = function () { current = n; render(); };
       tabsEl.appendChild(b);
     });
     listEl.innerHTML = "";
@@ -248,7 +246,7 @@
       var span = document.createElement("span");
       span.className = "txt";
       span.textContent = text;
-      span.onclick = function () { startEdit(it); };
+      span.onclick = function () { startEdit(it, row, span); };
       var star = document.createElement("button");
       star.className = "star";
       star.textContent = it[2] ? "★" : "☆";
@@ -262,39 +260,40 @@
     });
   }
 
-  function startEdit(it) {
+  // Edit in place: the text itself becomes editable. Enter or tapping away
+  // saves, Escape puts the old text back.
+  function startEdit(it, row, span) {
+    if (editing) return;
     editing = it;
-    newEl.value = it[1];
-    goEl.textContent = "Save";
-    cancelEl.hidden = false;
-    render();
-    newEl.focus();
+    var old = it[1], cancelled = false;
+    row.classList.add("editing");
+    span.contentEditable = "plaintext-only";
+    if (span.contentEditable !== "plaintext-only") span.contentEditable = "true";
+    span.focus();
+    var range = document.createRange(), sel = window.getSelection();
+    range.selectNodeContents(span); range.collapse(false);
+    sel.removeAllRanges(); sel.addRange(range);
+    span.onkeydown = function (ev) {
+      if (ev.key === "Enter" && !ev.shiftKey) { ev.preventDefault(); span.blur(); }
+      if (ev.key === "Escape") { cancelled = true; span.blur(); }
+    };
+    span.onblur = function () {
+      span.onkeydown = span.onblur = null;
+      span.contentEditable = "false";
+      editing = null;
+      var text = cancelled ? old : span.textContent.trim();
+      if (text && text !== old) {
+        it[1] = text;
+        enqueue({ action: "edit", tab: current, text: old, new_text: text });
+      }
+      render();
+    };
   }
-
-  function stopEdit() {
-    if (!editing) return;
-    editing = null;
-    newEl.value = "";
-    goEl.textContent = "Add";
-    cancelEl.hidden = true;
-  }
-
-  cancelEl.onclick = function () { stopEdit(); render(); };
 
   document.getElementById("bar").onsubmit = function (ev) {
     ev.preventDefault();
     var text = newEl.value.trim();
     if (!text || !current) return;
-    if (editing) {
-      var it = editing, old = it[1];
-      stopEdit();
-      if (text !== old) {
-        it[1] = text;
-        enqueue({ action: "edit", tab: current, text: old, new_text: text });
-      }
-      render();
-      return;
-    }
     newEl.value = "";
     tabs[current] = (tabs[current] || []).concat([[null, text, false]]);
     render();
