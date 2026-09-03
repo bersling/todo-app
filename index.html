@@ -34,23 +34,19 @@
     -webkit-font-smoothing: antialiased;
   }
   button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
-  button:focus-visible, #new:focus-visible {
-    outline: 2px solid var(--accent); outline-offset: 2px;
-  }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
   #app { display: flex; flex-direction: column; flex: 1; min-height: 0; position: relative; }
 
   /* tabs: a row of words, the current one underlined */
   #tabs {
     display: flex; gap: 2px; padding: 10px var(--pad) 0; overflow-x: auto; flex: none;
-    border-bottom: 1px solid var(--line);
-    scrollbar-width: none;
+    border-bottom: 1px solid var(--line); scrollbar-width: none;
   }
   #tabs::-webkit-scrollbar { display: none; }
   #tabs button {
     padding: 6px 8px 8px; color: var(--muted); white-space: nowrap;
-    border-bottom: 2px solid transparent; margin-bottom: -1px;
-    letter-spacing: 0.01em;
+    border-bottom: 2px solid transparent; margin-bottom: -1px; letter-spacing: 0.01em;
   }
   #tabs button.on { color: var(--fg); border-bottom-color: var(--fg); }
   #tabs button:hover { color: var(--fg); }
@@ -74,9 +70,7 @@
     border: 1.5px solid var(--faint); position: relative;
   }
   .tick:hover { border-color: var(--accent); }
-  .tick:hover::after {
-    content: ""; position: absolute; inset: 3px; border-radius: 50%; background: var(--accent);
-  }
+  .tick:hover::after { content: ""; position: absolute; inset: 3px; border-radius: 50%; background: var(--accent); }
   @media (pointer: coarse) { .tick { width: 22px; height: 22px; margin-top: 0.15em; } }
 
   .txt { flex: 1; min-width: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
@@ -102,16 +96,12 @@
   /* add box: a single line at the bottom */
   #bar {
     flex: none; display: flex; align-items: center; gap: 8px;
-    padding: 8px var(--pad);
-    padding-bottom: calc(8px + env(safe-area-inset-bottom));
+    padding: 8px var(--pad); padding-bottom: calc(8px + env(safe-area-inset-bottom));
     border-top: 1px solid var(--line);
   }
   #bar::before { content: "+"; color: var(--faint); font-size: 1.2em; line-height: 1; }
   #bar:focus-within::before { color: var(--accent); }
-  #new {
-    flex: 1; font: inherit; color: var(--fg); background: none; border: 0; padding: 6px 0;
-    min-width: 0;
-  }
+  #new { flex: 1; font: inherit; color: var(--fg); background: none; border: 0; padding: 6px 0; min-width: 0; }
   #new::placeholder { color: var(--faint); }
   #new:focus { outline: none; }
 
@@ -124,11 +114,13 @@
   }
   #help kbd { font: inherit; color: var(--muted); text-align: right; }
 
-  #tokform { padding: 40px 20px; display: flex; flex-direction: column; gap: 10px; max-width: 360px; }
-  #tokform input {
+  /* sign-in */
+  #login { padding: 40px 20px; display: flex; flex-direction: column; gap: 10px; max-width: 360px; }
+  #login input {
     font: inherit; padding: 10px 12px; border: 1px solid var(--line); background: none; color: var(--fg);
   }
-  #tokform button { padding: 10px 16px; background: var(--accent); color: #fff; }
+  #login button { padding: 10px 16px; background: var(--accent); color: #fff; }
+  #login .msg { color: var(--err); min-height: 1.4em; }
 </style>
 </head>
 <body>
@@ -147,116 +139,117 @@
     <kbd>t</kbd><span>flag for today</span>
     <kbd>d</kbd><span>done</span>
     <kbd>r</kbd><span>refresh</span>
-    <kbd>o</kbd><span>open the sheet</span>
+    <kbd>o</kbd><span>open the table</span>
     <kbd>esc</kbd><span>leave the add box, clear selection</span>
     <kbd>?</kbd><span>this</span>
   </div>
 </div>
-<form id="tokform" hidden>
-  <div>Enter the todo token</div>
-  <input id="tok" autocomplete="off">
-  <button>Save</button>
+<form id="login" hidden>
+  <div>Sign in to your todos</div>
+  <input id="email" type="email" placeholder="email" autocomplete="username">
+  <input id="password" type="password" placeholder="password" autocomplete="current-password">
+  <button>Sign in</button>
+  <div class="msg" id="loginmsg"></div>
 </form>
 
 <script>
-  // The Apps Script web app doing the sheet reads/writes. The URL is public
-  // knowledge; the token (entered once, kept in localStorage) is the secret.
-  var API = "https://script.google.com/macros/s/AKfycbwzJUdYPXPQaN4yeseF6w07p1tmRIrEBe1ipIoFmqCaDsATLD3qh6hrEbL-lGexsHoAoQ/exec";
-  var SHEET = "https://docs.google.com/spreadsheets/d/1MB74IgKYuaQftsn_e2n5AmlZFGryI0G0lnVVQXJwSOs";
+  // Supabase project. URL and anon key are public by design; row level
+  // security only lets the signed-in user at the rows. The session (a
+  // refresh token) is kept in localStorage after signing in once.
+  var SUPABASE = "https://wpfstejpyuetuqmayipa.supabase.co";
+  var ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndwZnN0ZWpweXVldHVxbWF5aXBhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg0NDY2NjUsImV4cCI6MjEwNDAyMjY2NX0.YfBOezAawCQUL3uT2taZ4hoLeYFCw0PgyEouav3YEDI";
+  var TABLE_URL = "https://supabase.com/dashboard/project/wpfstejpyuetuqmayipa/editor";
 
-  // Apps Script takes seconds per call, so the page never waits on it:
-  // the last known list + tab are painted from localStorage on open, and
-  // writes go through an outbox that is replayed on the next open if the
-  // app got closed before Google answered.
   var store = {
     get: function (k, d) { try { return JSON.parse(localStorage.getItem(k)) || d; } catch (e) { return d; } },
-    set: function (k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+    set: function (k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
+    del: function (k) { try { localStorage.removeItem(k); } catch (e) {} }
   };
 
-  var token = null, tabs = store.get("todo-cache", {}), current = store.get("todo-tab", null);
-  var outbox = store.get("todo-outbox", []), sending = false;
+  // tabs: {list name: [{id, text, today}, ...]} — painted from cache on open
+  var tabs = store.get("todo-cache", {}), current = store.get("todo-tab", null);
+  var session = store.get("todo-session", null);
   var editing = null;   // item being edited in place, or null
   var sel = null;       // keyboard-selected item, or null
   var shown = [];       // items of the current tab in display order (today first)
 
-  try {
-    var fromUrl = new URLSearchParams(location.search).get("key");
-    if (fromUrl) {
-      localStorage.setItem("todo-token", fromUrl);
-      history.replaceState(null, "", location.pathname);
-    }
-    token = localStorage.getItem("todo-token");
-  } catch (e) {}
-
   var app = document.getElementById("app"),
-      tokform = document.getElementById("tokform"),
+      login = document.getElementById("login"),
       tabsEl = document.getElementById("tabs"),
       listEl = document.getElementById("list"),
       newEl = document.getElementById("new"),
       helpEl = document.getElementById("help");
 
-  // Google answers with an HTML page (status 200) when the script is busy or
-  // down; treat that like a network error so reads retry and writes stay queued.
-  function parse(r) {
-    return r.text().then(function (t) {
-      var res;
-      try { res = JSON.parse(t); } catch (e) { throw new TypeError("Google isn't answering, retrying"); }
-      if (!res.ok) throw new Error(res.error);
-      return res;
+  // ---- auth
+
+  function auth(grant, body) {
+    return fetch(SUPABASE + "/auth/v1/token?grant_type=" + grant, {
+      method: "POST", headers: { apikey: ANON, "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (res) {
+        if (!res.ok) throw new Error(res.j.error_description || res.j.msg || res.j.message || "sign-in failed");
+        session = { access: res.j.access_token, refresh: res.j.refresh_token,
+                    exp: Date.now() + (res.j.expires_in || 3600) * 1000 };
+        store.set("todo-session", session);
+        return session.access;
+      });
+  }
+
+  var refreshing = null;
+  function token(force) {
+    if (!session) return Promise.reject(new Error("signed out"));
+    if (!force && session.exp - Date.now() > 60000) return Promise.resolve(session.access);
+    if (!refreshing) {
+      refreshing = auth("refresh_token", { refresh_token: session.refresh })
+        .catch(function (err) { signOut(); throw err; })
+        .then(function (t) { refreshing = null; return t; }, function (err) { refreshing = null; throw err; });
+    }
+    return refreshing;
+  }
+
+  function signOut() {
+    session = null; store.del("todo-session"); boot();
+  }
+
+  // ---- rest
+
+  function rest(path, opts, retry) {
+    opts = opts || {};
+    return token(retry).then(function (t) {
+      var headers = { apikey: ANON, Authorization: "Bearer " + t };
+      if (opts.body) headers["Content-Type"] = "application/json";
+      if (opts.prefer) headers.Prefer = opts.prefer;
+      return fetch(SUPABASE + "/rest/v1/" + path, {
+        method: opts.method || "GET", headers: headers,
+        body: opts.body ? JSON.stringify(opts.body) : undefined, keepalive: true
+      });
+    }).then(function (r) {
+      if (r.status === 401 && !retry) return rest(path, opts, true);
+      if (!r.ok) return r.json().catch(function () { return {}; }).then(function (j) {
+        throw new Error(j.message || j.hint || ("error " + r.status));
+      });
+      return r.status === 204 ? null : r.text().then(function (t) { return t ? JSON.parse(t) : null; });
     });
   }
 
   function list() {
-    return fetch(API + "?token=" + encodeURIComponent(token)).then(parse).then(function (res) { return res.tabs; });
-  }
-
-  function write(params) {
-    var body = new URLSearchParams(params);
-    body.set("token", token);
-    return fetch(API, { method: "POST", body: body, keepalive: true }).then(parse);
-  }
-
-  // Queue a write and start draining. Each op is retried until it succeeds or
-  // the server rejects it for a reason other than being unreachable.
-  function enqueue(op) {
-    outbox.push(op);
-    store.set("todo-outbox", outbox);
-    drain();
-  }
-
-  function drain() {
-    if (sending || !outbox.length || !token) return;
-    sending = true;
-    var op = outbox[0];
-    write(op).then(function () {
-      outbox.shift();
-    }).catch(function (err) {
-      var msg = String(err.message || err);
-      if (msg.indexOf("bad token") >= 0) return fail(err);
-      // "not found" etc: the server saw it and said no, drop it; network
-      // errors keep it for the next attempt
-      if (err instanceof TypeError) return;
-      outbox.shift();
-      showErr(msg);
-    }).then(function () {
-      store.set("todo-outbox", outbox);
-      sending = false;
-      if (outbox.length) setTimeout(drain, 3000);
+    return Promise.all([
+      rest("lists?select=name&order=position,name"),
+      rest("todos?select=id,list,text,today&order=position,created_at")
+    ]).then(function (res) {
+      var fresh = {};
+      res[0].forEach(function (l) { fresh[l.name] = []; });
+      res[1].forEach(function (r) {
+        (fresh[r.list] = fresh[r.list] || []).push({ id: r.id, text: r.text, today: r.today });
+      });
+      return fresh;
     });
   }
 
-  // Fresh data from the server is missing whatever is still in the outbox.
-  function applyOutbox(fresh) {
-    outbox.forEach(function (op) {
-      var items = fresh[op.tab];
-      if (!items) return;
-      if (op.action === "add") items.push([null, op.text]);
-      var i = items.findIndex(function (x) { return x[1] === op.text; });
-      if (op.action === "done" && i >= 0) items.splice(i, 1);
-      if (op.action === "edit" && i >= 0) items[i][1] = op.new_text;
-      if (op.action === "today" && i >= 0) items[i][2] = op.value === "1";
-    });
-    return fresh;
+  // Writes: optimistic in the UI, then the request, then a refresh to settle.
+  function write(p) {
+    return p.then(refresh).catch(function (err) { showErr(String(err.message || err)); refresh(); });
   }
 
   function showErr(msg) {
@@ -267,34 +260,25 @@
     listEl.insertAdjacentElement("afterbegin", el);
   }
 
-  function fail(err) {
-    if (String(err.message || err).indexOf("bad token") >= 0) {
-      try { localStorage.removeItem("todo-token"); } catch (e) {}
-      token = null; boot(); return;
-    }
-    showErr(String(err.message || err));
-    if (err instanceof TypeError) setTimeout(refresh, 15000);
-  }
-
-  var refreshing = false;
+  var fetching = false;
   function refresh() {
-    if (refreshing) return;
-    refreshing = true;
-    list().then(function (fresh) {
-      refreshing = false;
-      fresh = applyOutbox(fresh);
+    if (fetching || !session) return;
+    fetching = true;
+    return list().then(function (fresh) {
+      fetching = false;
       if (editing) return;  // don't repaint under an open edit; next refresh catches up
-      var stale = JSON.stringify(fresh) !== JSON.stringify(tabs);
-      if (stale || document.getElementById("empty") || document.getElementById("err")) render(fresh);
-    }).catch(function (err) { refreshing = false; fail(err); });
+      render(fresh);
+    }).catch(function (err) {
+      fetching = false;
+      if (session) showErr(String(err.message || err));
+    });
   }
 
-  // After a re-render the selected item object may be gone (fresh data):
-  // find it again by text.
+  // ---- render
+
   function keepSelection(items) {
     if (!sel) return null;
-    if (items.indexOf(sel) >= 0) return sel;
-    return items.find(function (x) { return x[1] === sel[1]; }) || null;
+    return items.find(function (x) { return x.id === sel.id || (!x.id && x.text === sel.text); }) || null;
   }
 
   function render(fresh) {
@@ -314,12 +298,11 @@
     });
 
     listEl.innerHTML = "";
-    // today-flagged items float to the top
-    var items = (tabs[current] || []).slice().sort(function (a, b) { return (b[2] ? 1 : 0) - (a[2] ? 1 : 0); });
+    var items = (tabs[current] || []).slice().sort(function (a, b) { return (b.today ? 1 : 0) - (a.today ? 1 : 0); });
     shown = items;
     sel = keepSelection(items);
     if (!items.length) listEl.innerHTML = '<div id="empty">Nothing here. Add one below.</div>';
-    var todayCount = items.filter(function (x) { return x[2]; }).length;
+    var todayCount = items.filter(function (x) { return x.today; }).length;
     items.forEach(function (it, idx) {
       if (idx === todayCount && todayCount > 0) {
         var div = document.createElement("div"); div.className = "divider";
@@ -331,16 +314,16 @@
 
   function row(it) {
     var el = document.createElement("div");
-    el.className = "item" + (it === sel ? " sel" : "") + (it[2] ? " today" : "");
+    el.className = "item" + (it === sel ? " sel" : "") + (it.today ? " today" : "");
     var tick = document.createElement("button");
     tick.className = "tick"; tick.title = "Done"; tick.setAttribute("aria-label", "Done");
     tick.onclick = function () { complete(it); };
     var span = document.createElement("span");
     span.className = "txt";
-    span.textContent = it[1];
+    span.textContent = it.text;
     var star = document.createElement("button");
     star.className = "star"; star.title = "Today";
-    star.textContent = it[2] ? "★" : "☆";
+    star.textContent = it.today ? "★" : "☆";
     star.onclick = function () { toggleToday(it); };
     // the whole row edits, except the circle and the star
     el.onclick = function (ev) {
@@ -362,13 +345,33 @@
     tabs[current] = tabs[current].filter(function (x) { return x !== it; });
     if (sel === it) sel = shown[idx + 1] || shown[idx - 1] || null;
     setTimeout(render, el ? 150 : 0);
-    enqueue({ action: "done", tab: current, text: it[1] });
+    write(byId(it).then(function (id) { return rest("todos?id=eq." + id, { method: "DELETE" }); }));
   }
 
   function toggleToday(it) {
-    it[2] = !it[2];
+    it.today = !it.today;
     render();
-    enqueue({ action: "today", tab: current, text: it[1], value: it[2] ? "1" : "0" });
+    write(byId(it).then(function (id) {
+      return rest("todos?id=eq." + id, { method: "PATCH", body: { today: it.today }, prefer: "return=minimal" });
+    }));
+  }
+
+  function add(text) {
+    var it = { id: null, text: text, today: false };
+    tabs[current] = (tabs[current] || []).concat([it]);
+    render();
+    write(rest("todos", { method: "POST", body: { list: current, text: text }, prefer: "return=representation" })
+      .then(function (rows) { if (rows && rows[0]) it.id = rows[0].id; }));
+  }
+
+  // An item added a moment ago may not have its id yet: look it up by text.
+  function byId(it) {
+    if (it.id) return Promise.resolve(it.id);
+    var q = "todos?select=id&list=eq." + encodeURIComponent(current) + "&text=eq." + encodeURIComponent(it.text) + "&limit=1";
+    return rest(q).then(function (rows) {
+      if (!rows || !rows.length) throw new Error("not found: " + it.text);
+      return (it.id = rows[0].id);
+    });
   }
 
   function switchTab(n) {
@@ -381,7 +384,7 @@
   function startEdit(it, el, span) {
     if (editing) return;
     editing = it;
-    var old = it[1], cancelled = false;
+    var old = it.text, cancelled = false;
     el.classList.add("editing");
     span.contentEditable = "plaintext-only";
     if (span.contentEditable !== "plaintext-only") span.contentEditable = "true";
@@ -400,8 +403,10 @@
       editing = null;
       var text = cancelled ? old : span.textContent.trim();
       if (text && text !== old) {
-        it[1] = text;
-        enqueue({ action: "edit", tab: current, text: old, new_text: text });
+        it.text = text;
+        write(byId(it).then(function (id) {
+          return rest("todos?id=eq." + id, { method: "PATCH", body: { text: text }, prefer: "return=minimal" });
+        }));
       }
       render();
     };
@@ -426,7 +431,7 @@
   // ---- keyboard: the TUI's keys
 
   document.addEventListener("keydown", function (ev) {
-    if (!token) return;
+    if (!session) return;
     if (ev.target === newEl) {
       if (ev.key === "Escape") { newEl.blur(); ev.preventDefault(); }
       return;
@@ -444,7 +449,7 @@
       case "t": if (sel) toggleToday(sel); break;
       case "d": if (sel) complete(sel); break;
       case "r": refresh(); break;
-      case "o": window.open(SHEET, "_blank"); break;
+      case "o": window.open(TABLE_URL, "_blank"); break;
       case "?": helpEl.hidden = !helpEl.hidden; break;
       case "Escape": sel = null; render(); break;
       default:
@@ -461,35 +466,34 @@
     var text = newEl.value.trim();
     if (!text || !current) return;
     newEl.value = "";
-    tabs[current] = (tabs[current] || []).concat([[null, text, false]]);
-    render();
-    enqueue({ action: "add", tab: current, text: text });
+    add(text);
   };
 
-  tokform.onsubmit = function (ev) {
+  login.onsubmit = function (ev) {
     ev.preventDefault();
-    var t = document.getElementById("tok").value.trim();
-    if (!t) return;
-    try { localStorage.setItem("todo-token", t); } catch (e) {}
-    token = t; boot();
+    var msg = document.getElementById("loginmsg");
+    msg.textContent = "";
+    auth("password", { email: document.getElementById("email").value.trim(),
+                       password: document.getElementById("password").value })
+      .then(boot)
+      .catch(function (err) { msg.textContent = String(err.message || err); });
   };
 
   function boot() {
-    tokform.hidden = !!token;
-    app.hidden = !token;
-    if (!token) return;
+    login.hidden = !!session;
+    app.hidden = !session;
+    if (!session) return;
     if (Object.keys(tabs).length) render();
     else listEl.innerHTML = '<div id="empty">Loading your lists</div>';
-    drain();
     refresh();
   }
   boot();
 
   // refresh when brought back to the foreground, and every 2 minutes while visible
   document.addEventListener("visibilitychange", function () {
-    if (!document.hidden && token) { drain(); refresh(); }
+    if (!document.hidden && session) refresh();
   });
-  setInterval(function () { if (!document.hidden && token) refresh(); }, 120000);
+  setInterval(function () { if (!document.hidden && session) refresh(); }, 120000);
 </script>
 </body>
 </html>
