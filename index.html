@@ -3,83 +3,132 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<meta name="theme-color" content="#2f6f4f">
+<meta name="theme-color" content="#f3f4f1">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <title>TODO</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✅</text></svg>">
 <style>
   :root {
-    --bg: #f6f6f4; --fg: #1a1a1a; --muted: #8a8a86;
-    --card: #ffffff; --line: #e4e4e0; --accent: #2f6f4f;
+    --bg: #f3f4f1; --fg: #191b1e; --muted: #7d8288; --faint: #b9bdc2;
+    --line: #dfe2de; --accent: #2b6e58; --sel: #e6ebe4; --star: #d69a1e;
+    --err: #b5433b;
+    --size: 15px; --pad: 10px;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #131315; --fg: #e8e8e6; --muted: #7c7c80;
-      --card: #1d1d20; --line: #2a2a2e; --accent: #6fbf94;
+      --bg: #17181a; --fg: #e6e6e3; --muted: #85898f; --faint: #4b4f55;
+      --line: #2a2c30; --accent: #6fbf97; --sel: #23262a; --star: #e2ad3a;
     }
   }
+  /* touch screens: roomier */
+  @media (pointer: coarse) { :root { --size: 17px; --pad: 14px; } }
+
   * { box-sizing: border-box; margin: 0; }
   [hidden] { display: none !important; }
   html, body { height: 100%; }
   body {
     background: var(--bg); color: var(--fg);
-    font: 17px/1.4 -apple-system, system-ui, sans-serif;
+    font: var(--size)/1.45 -apple-system, system-ui, "Helvetica Neue", sans-serif;
     display: flex; flex-direction: column;
+    -webkit-font-smoothing: antialiased;
   }
-  #app { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+  button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+  button:focus-visible, #new:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px;
+  }
+
+  #app { display: flex; flex-direction: column; flex: 1; min-height: 0; position: relative; }
+
+  /* tabs: a row of words, the current one underlined */
   #tabs {
-    display: flex; gap: 8px; padding: 14px 14px 10px; overflow-x: auto;
-    flex: none;
+    display: flex; gap: 2px; padding: 10px var(--pad) 0; overflow-x: auto; flex: none;
+    border-bottom: 1px solid var(--line);
+    scrollbar-width: none;
   }
+  #tabs::-webkit-scrollbar { display: none; }
   #tabs button {
-    border: 1px solid var(--line); background: var(--card); color: var(--muted);
-    border-radius: 999px; padding: 7px 16px; font: inherit; font-size: 15px;
-    white-space: nowrap;
+    padding: 6px 8px 8px; color: var(--muted); white-space: nowrap;
+    border-bottom: 2px solid transparent; margin-bottom: -1px;
+    letter-spacing: 0.01em;
   }
-  #tabs button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
-  #list { flex: 1; overflow-y: auto; padding: 4px 14px 14px; }
+  #tabs button.on { color: var(--fg); border-bottom-color: var(--fg); }
+  #tabs button:hover { color: var(--fg); }
+
+  /* list */
+  #list { flex: 1; overflow-y: auto; padding: 4px 0 8px; }
   .item {
-    display: flex; align-items: center; gap: 12px; cursor: text;
-    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
-    padding: 13px 14px; margin-bottom: 8px;
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: calc(var(--pad) * 0.7) var(--pad) calc(var(--pad) * 0.7) calc(var(--pad) - 3px);
+    border-left: 3px solid transparent; border-bottom: 1px solid var(--line);
+    cursor: text;
   }
-  .item.out { opacity: 0.25; }
-  .item.editing { border-color: var(--accent); }
-  .txt:focus { outline: none; }
-  .item.today { border-color: var(--accent); }
+  .item:last-child { border-bottom: 0; }
+  .item.sel { background: var(--sel); border-left-color: var(--accent); }
+  .item.out { opacity: 0; transform: translateX(8px); transition: opacity .15s, transform .15s; }
+  .item.editing { background: var(--sel); }
   .item.today .txt { font-weight: 600; }
-  .star {
-    flex: none; margin-left: auto; background: none; border: 0; padding: 0 2px;
-    font-size: 22px; line-height: 1; color: var(--line);
-  }
-  .item.today .star { color: var(--accent); }
-  .tick, .star { cursor: pointer; }
+
   .tick {
-    flex: none; width: 24px; height: 24px; border-radius: 50%;
-    border: 2px solid var(--muted); background: none; padding: 0;
+    flex: none; width: 18px; height: 18px; border-radius: 50%; margin-top: 0.22em;
+    border: 1.5px solid var(--faint); position: relative;
   }
-  .txt { flex: 1; overflow-wrap: anywhere; white-space: pre-wrap; }
-  #empty, #err { color: var(--muted); text-align: center; padding: 24px 0; }
-  #err { color: #c0564f; }
+  .tick:hover { border-color: var(--accent); }
+  .tick:hover::after {
+    content: ""; position: absolute; inset: 3px; border-radius: 50%; background: var(--accent);
+  }
+  @media (pointer: coarse) { .tick { width: 22px; height: 22px; margin-top: 0.15em; } }
+
+  .txt { flex: 1; min-width: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+  .txt:focus { outline: none; }
+  .item.editing .txt { caret-color: var(--accent); }
+
+  .star {
+    flex: none; width: 22px; height: 22px; margin-top: 0.1em; line-height: 22px;
+    text-align: center; font-size: 17px; color: var(--faint);
+    opacity: 0; transition: opacity .12s;
+  }
+  .item:hover .star, .item.sel .star, .item.today .star { opacity: 1; }
+  .star:hover { color: var(--star); }
+  .item.today .star { color: var(--star); }
+  @media (pointer: coarse) { .star { opacity: 1; } }
+
+  /* thin divider between today items and the rest */
+  .divider { border-top: 1px dashed var(--faint); margin: 6px var(--pad); }
+
+  #empty, #err { padding: 28px var(--pad); color: var(--muted); text-align: center; }
+  #err { color: var(--err); padding: 10px var(--pad); text-align: left; border-bottom: 1px solid var(--line); }
+
+  /* add box: a single line at the bottom */
   #bar {
-    flex: none; display: flex; gap: 8px; padding: 10px 14px;
-    padding-bottom: calc(10px + env(safe-area-inset-bottom));
-    border-top: 1px solid var(--line); background: var(--card);
+    flex: none; display: flex; align-items: center; gap: 8px;
+    padding: 8px var(--pad);
+    padding-bottom: calc(8px + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--line);
   }
+  #bar::before { content: "+"; color: var(--faint); font-size: 1.2em; line-height: 1; }
+  #bar:focus-within::before { color: var(--accent); }
   #new {
-    flex: 1; font: inherit; color: var(--fg); background: var(--bg);
-    border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
+    flex: 1; font: inherit; color: var(--fg); background: none; border: 0; padding: 6px 0;
+    min-width: 0;
   }
-  #bar button, #tokform button {
-    font: inherit; border: 0; border-radius: 10px; padding: 10px 16px;
-    background: var(--accent); color: #fff;
+  #new::placeholder { color: var(--faint); }
+  #new:focus { outline: none; }
+
+  /* keyboard help, toggled with ? */
+  #help {
+    position: absolute; left: var(--pad); right: var(--pad); bottom: 52px;
+    background: var(--bg); border: 1px solid var(--line); padding: 12px 14px;
+    display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; font-size: 0.93em;
+    box-shadow: 0 6px 24px rgba(0,0,0,0.12);
   }
-  #tokform { padding: 40px 20px; display: flex; flex-direction: column; gap: 10px; }
+  #help kbd { font: inherit; color: var(--muted); text-align: right; }
+
+  #tokform { padding: 40px 20px; display: flex; flex-direction: column; gap: 10px; max-width: 360px; }
   #tokform input {
-    font: inherit; padding: 10px 12px; border-radius: 10px;
-    border: 1px solid var(--line); background: var(--card); color: var(--fg);
+    font: inherit; padding: 10px 12px; border: 1px solid var(--line); background: none; color: var(--fg);
   }
+  #tokform button { padding: 10px 16px; background: var(--accent); color: #fff; }
 </style>
 </head>
 <body>
@@ -88,9 +137,20 @@
   <div id="tabs"></div>
   <div id="list"></div>
   <form id="bar">
-    <input id="new" placeholder="Add a todo…" autocomplete="off">
-    <button id="go">Add</button>
+    <input id="new" placeholder="Add a todo" autocomplete="off" enterkeyhint="done">
   </form>
+  <div id="help" hidden>
+    <kbd>j k ↑ ↓</kbd><span>move</span>
+    <kbd>h l tab 1–9</kbd><span>switch list</span>
+    <kbd>a</kbd><span>add</span>
+    <kbd>e ↵</kbd><span>edit</span>
+    <kbd>t</kbd><span>flag for today</span>
+    <kbd>d space</kbd><span>done</span>
+    <kbd>r</kbd><span>refresh</span>
+    <kbd>o</kbd><span>open the sheet</span>
+    <kbd>esc</kbd><span>leave the add box, clear selection</span>
+    <kbd>?</kbd><span>this</span>
+  </div>
 </div>
 <form id="tokform" hidden>
   <div>Enter the todo token</div>
@@ -102,6 +162,7 @@
   // The Apps Script web app doing the sheet reads/writes. The URL is public
   // knowledge; the token (entered once, kept in localStorage) is the secret.
   var API = "https://script.google.com/macros/s/AKfycbwzJUdYPXPQaN4yeseF6w07p1tmRIrEBe1ipIoFmqCaDsATLD3qh6hrEbL-lGexsHoAoQ/exec";
+  var SHEET = "https://docs.google.com/spreadsheets/d/1MB74IgKYuaQftsn_e2n5AmlZFGryI0G0lnVVQXJwSOs";
 
   // Apps Script takes seconds per call, so the page never waits on it:
   // the last known list + tab are painted from localStorage on open, and
@@ -114,7 +175,9 @@
 
   var token = null, tabs = store.get("todo-cache", {}), current = store.get("todo-tab", null);
   var outbox = store.get("todo-outbox", []), sending = false;
-  var editing = null;  // item being edited in place, or null
+  var editing = null;   // item being edited in place, or null
+  var sel = null;       // keyboard-selected item, or null
+  var shown = [];       // items of the current tab in display order (today first)
 
   try {
     var fromUrl = new URLSearchParams(location.search).get("key");
@@ -129,25 +192,28 @@
       tokform = document.getElementById("tokform"),
       tabsEl = document.getElementById("tabs"),
       listEl = document.getElementById("list"),
-      newEl = document.getElementById("new");
+      newEl = document.getElementById("new"),
+      helpEl = document.getElementById("help");
+
+  // Google answers with an HTML page (status 200) when the script is busy or
+  // down; treat that like a network error so reads retry and writes stay queued.
+  function parse(r) {
+    return r.text().then(function (t) {
+      var res;
+      try { res = JSON.parse(t); } catch (e) { throw new TypeError("Google isn't answering, retrying"); }
+      if (!res.ok) throw new Error(res.error);
+      return res;
+    });
+  }
 
   function list() {
-    return fetch(API + "?token=" + encodeURIComponent(token))
-      .then(function (r) { return r.json(); })
-      .then(function (res) {
-        if (!res.ok) throw new Error(res.error);
-        return res.tabs;
-      });
+    return fetch(API + "?token=" + encodeURIComponent(token)).then(parse).then(function (res) { return res.tabs; });
   }
 
   function write(params) {
     var body = new URLSearchParams(params);
     body.set("token", token);
-    return fetch(API, { method: "POST", body: body, keepalive: true })
-      .then(function (r) { return r.json(); })
-      .then(function (res) {
-        if (!res.ok) throw new Error(res.error);
-      });
+    return fetch(API, { method: "POST", body: body, keepalive: true }).then(parse);
   }
 
   // Queue a write and start draining. Each op is retried until it succeeds or
@@ -194,7 +260,11 @@
   }
 
   function showErr(msg) {
-    listEl.insertAdjacentHTML("afterbegin", '<div id="err">' + msg + "</div>");
+    var old = document.getElementById("err");
+    if (old) old.remove();
+    var el = document.createElement("div");
+    el.id = "err"; el.textContent = msg;
+    listEl.insertAdjacentElement("afterbegin", el);
   }
 
   function fail(err) {
@@ -203,15 +273,28 @@
       token = null; boot(); return;
     }
     showErr(String(err.message || err));
+    if (err instanceof TypeError) setTimeout(refresh, 15000);
   }
 
+  var refreshing = false;
   function refresh() {
+    if (refreshing) return;
+    refreshing = true;
     list().then(function (fresh) {
+      refreshing = false;
       fresh = applyOutbox(fresh);
       if (editing) return;  // don't repaint under an open edit; next refresh catches up
-      if (JSON.stringify(fresh) !== JSON.stringify(tabs)) render(fresh);
-      drain();
-    }).catch(fail);
+      var stale = JSON.stringify(fresh) !== JSON.stringify(tabs);
+      if (stale || document.getElementById("empty") || document.getElementById("err")) render(fresh);
+    }).catch(function (err) { refreshing = false; fail(err); });
+  }
+
+  // After a re-render the selected item object may be gone (fresh data):
+  // find it again by text.
+  function keepSelection(items) {
+    if (!sel) return null;
+    if (items.indexOf(sel) >= 0) return sel;
+    return items.find(function (x) { return x[1] === sel[1]; }) || null;
   }
 
   function render(fresh) {
@@ -220,67 +303,96 @@
     var names = Object.keys(tabs);
     if (current === null || names.indexOf(current) < 0) current = names[0] || null;
     store.set("todo-tab", current);
+
     tabsEl.innerHTML = "";
     names.forEach(function (n) {
       var b = document.createElement("button");
       b.textContent = n;
       b.className = n === current ? "on" : "";
-      b.onclick = function () { current = n; render(); };
+      b.onclick = function () { switchTab(n); };
       tabsEl.appendChild(b);
     });
+
     listEl.innerHTML = "";
     // today-flagged items float to the top
     var items = (tabs[current] || []).slice().sort(function (a, b) { return (b[2] ? 1 : 0) - (a[2] ? 1 : 0); });
-    if (!items.length) listEl.innerHTML = '<div id="empty">nothing here 🎉</div>';
-    items.forEach(function (it) {
-      var text = it[1];
-      var row = document.createElement("div");
-      row.className = "item" + (it === editing ? " editing" : "") + (it[2] ? " today" : "");
-      var tick = document.createElement("button");
-      tick.className = "tick";
-      tick.onclick = function () {
-        row.classList.add("out");
-        tabs[current] = tabs[current].filter(function (x) { return x !== it; });
-        setTimeout(render, 150);
-        enqueue({ action: "done", tab: current, text: text });
-      };
-      var span = document.createElement("span");
-      span.className = "txt";
-      span.textContent = text;
-      // the whole row edits, except the circle and the star
-      row.onclick = function (ev) {
-        if (ev.target === tick || ev.target === star) return;
-        startEdit(it, row, span);
-      };
-      var star = document.createElement("button");
-      star.className = "star";
-      star.textContent = it[2] ? "★" : "☆";
-      star.onclick = function () {
-        it[2] = !it[2];
-        render();
-        enqueue({ action: "today", tab: current, text: it[1], value: it[2] ? "1" : "0" });
-      };
-      row.appendChild(tick); row.appendChild(span); row.appendChild(star);
-      listEl.appendChild(row);
+    shown = items;
+    sel = keepSelection(items);
+    if (!items.length) listEl.innerHTML = '<div id="empty">Nothing here. Add one below.</div>';
+    var todayCount = items.filter(function (x) { return x[2]; }).length;
+    items.forEach(function (it, idx) {
+      if (idx === todayCount && todayCount > 0) {
+        var div = document.createElement("div"); div.className = "divider";
+        listEl.appendChild(div);
+      }
+      listEl.appendChild(row(it));
     });
+  }
+
+  function row(it) {
+    var el = document.createElement("div");
+    el.className = "item" + (it === sel ? " sel" : "") + (it[2] ? " today" : "");
+    var tick = document.createElement("button");
+    tick.className = "tick"; tick.title = "Done"; tick.setAttribute("aria-label", "Done");
+    tick.onclick = function () { complete(it); };
+    var span = document.createElement("span");
+    span.className = "txt";
+    span.textContent = it[1];
+    var star = document.createElement("button");
+    star.className = "star"; star.title = "Today";
+    star.textContent = it[2] ? "★" : "☆";
+    star.onclick = function () { toggleToday(it); };
+    // the whole row edits, except the circle and the star
+    el.onclick = function (ev) {
+      if (ev.target === tick || ev.target === star) return;
+      sel = it;
+      startEdit(it, el, span);
+    };
+    el.appendChild(tick); el.appendChild(span); el.appendChild(star);
+    return el;
+  }
+
+  function rowEl(it) { return listEl.querySelectorAll(".item")[shown.indexOf(it)]; }
+
+  // ---- actions, shared by mouse and keyboard
+
+  function complete(it) {
+    var idx = shown.indexOf(it), el = rowEl(it);
+    if (el) el.classList.add("out");
+    tabs[current] = tabs[current].filter(function (x) { return x !== it; });
+    if (sel === it) sel = shown[idx + 1] || shown[idx - 1] || null;
+    setTimeout(render, el ? 150 : 0);
+    enqueue({ action: "done", tab: current, text: it[1] });
+  }
+
+  function toggleToday(it) {
+    it[2] = !it[2];
+    render();
+    enqueue({ action: "today", tab: current, text: it[1], value: it[2] ? "1" : "0" });
+  }
+
+  function switchTab(n) {
+    if (n === current) return;
+    current = n; sel = null; render();
   }
 
   // Edit in place: the text itself becomes editable. Enter or tapping away
   // saves, Escape puts the old text back.
-  function startEdit(it, row, span) {
+  function startEdit(it, el, span) {
     if (editing) return;
     editing = it;
     var old = it[1], cancelled = false;
-    row.classList.add("editing");
+    el.classList.add("editing");
     span.contentEditable = "plaintext-only";
     if (span.contentEditable !== "plaintext-only") span.contentEditable = "true";
     span.focus();
-    var range = document.createRange(), sel = window.getSelection();
+    var range = document.createRange(), s = window.getSelection();
     range.selectNodeContents(span); range.collapse(false);
-    sel.removeAllRanges(); sel.addRange(range);
+    s.removeAllRanges(); s.addRange(range);
     span.onkeydown = function (ev) {
       if (ev.key === "Enter" && !ev.shiftKey) { ev.preventDefault(); span.blur(); }
       if (ev.key === "Escape") { cancelled = true; span.blur(); }
+      ev.stopPropagation();
     };
     span.onblur = function () {
       span.onkeydown = span.onblur = null;
@@ -294,6 +406,55 @@
       render();
     };
   }
+
+  function move(delta) {
+    if (!shown.length) return;
+    var idx = shown.indexOf(sel);
+    idx = idx < 0 ? (delta > 0 ? 0 : shown.length - 1) : Math.max(0, Math.min(shown.length - 1, idx + delta));
+    sel = shown[idx];
+    render();
+    var el = rowEl(sel);
+    if (el) el.scrollIntoView({ block: "nearest" });
+  }
+
+  function moveTab(delta) {
+    var names = Object.keys(tabs);
+    if (names.length < 2) return;
+    switchTab(names[(names.indexOf(current) + delta + names.length) % names.length]);
+  }
+
+  // ---- keyboard: the TUI's keys
+
+  document.addEventListener("keydown", function (ev) {
+    if (!token) return;
+    if (ev.target === newEl) {
+      if (ev.key === "Escape") { newEl.blur(); ev.preventDefault(); }
+      return;
+    }
+    if (ev.target.isContentEditable) return;
+    if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
+    if (!helpEl.hidden && ev.key !== "?") helpEl.hidden = true;
+    switch (ev.key) {
+      case "j": case "ArrowDown": move(1); break;
+      case "k": case "ArrowUp": move(-1); break;
+      case "l": case "Tab": moveTab(ev.shiftKey ? -1 : 1); break;
+      case "h": moveTab(-1); break;
+      case "a": newEl.focus(); break;
+      case "e": case "Enter": if (sel) startEdit(sel, rowEl(sel), rowEl(sel).querySelector(".txt")); break;
+      case "t": if (sel) toggleToday(sel); break;
+      case "d": case " ": if (sel) complete(sel); break;
+      case "r": refresh(); break;
+      case "o": window.open(SHEET, "_blank"); break;
+      case "?": helpEl.hidden = !helpEl.hidden; break;
+      case "Escape": sel = null; render(); break;
+      default:
+        if (ev.key >= "1" && ev.key <= "9") {
+          var n = Object.keys(tabs)[+ev.key - 1];
+          if (n) switchTab(n);
+        } else return;
+    }
+    ev.preventDefault();
+  });
 
   document.getElementById("bar").onsubmit = function (ev) {
     ev.preventDefault();
@@ -317,17 +478,18 @@
     tokform.hidden = !!token;
     app.hidden = !token;
     if (!token) return;
-    if (Object.keys(tabs).length) { render(); newEl.focus(); }
-    else listEl.innerHTML = '<div id="empty">loading…</div>';
+    if (Object.keys(tabs).length) render();
+    else listEl.innerHTML = '<div id="empty">Loading your lists</div>';
     drain();
     refresh();
   }
   boot();
 
-  // refresh when the app is brought back to the foreground
+  // refresh when brought back to the foreground, and every 2 minutes while visible
   document.addEventListener("visibilitychange", function () {
     if (!document.hidden && token) { drain(); refresh(); }
   });
+  setInterval(function () { if (!document.hidden && token) refresh(); }, 120000);
 </script>
 </body>
 </html>
