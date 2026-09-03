@@ -40,7 +40,7 @@
   #tabs button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
   #list { flex: 1; overflow-y: auto; padding: 4px 14px 14px; }
   .item {
-    display: flex; align-items: center; gap: 12px;
+    display: flex; align-items: center; gap: 12px; cursor: text;
     background: var(--card); border: 1px solid var(--line); border-radius: 12px;
     padding: 13px 14px; margin-bottom: 8px;
   }
@@ -54,6 +54,7 @@
     font-size: 22px; line-height: 1; color: var(--line);
   }
   .item.today .star { color: var(--accent); }
+  .tick, .star { cursor: pointer; }
   .tick {
     flex: none; width: 24px; height: 24px; border-radius: 50%;
     border: 2px solid var(--muted); background: none; padding: 0;
@@ -246,7 +247,11 @@
       var span = document.createElement("span");
       span.className = "txt";
       span.textContent = text;
-      span.onclick = function () { startEdit(it, row, span); };
+      // the whole row edits, except the circle and the star
+      row.onclick = function (ev) {
+        if (ev.target === tick || ev.target === star) return;
+        startEdit(it, row, span);
+      };
       var star = document.createElement("button");
       star.className = "star";
       star.textContent = it[2] ? "★" : "☆";
