@@ -45,6 +45,7 @@
     padding: 13px 14px; margin-bottom: 8px;
   }
   .item.out { opacity: 0.25; }
+  .item.editing { border-color: var(--accent); }
   .tick {
     flex: none; width: 24px; height: 24px; border-radius: 50%;
     border: 2px solid var(--muted); background: none; padding: 0;
@@ -65,6 +66,7 @@
     font: inherit; border: 0; border-radius: 10px; padding: 10px 16px;
     background: var(--accent); color: #fff;
   }
+  #cancel { background: var(--line) !important; color: var(--muted) !important; }
   #tokform { padding: 40px 20px; display: flex; flex-direction: column; gap: 10px; }
   #tokform input {
     font: inherit; padding: 10px 12px; border-radius: 10px;
@@ -79,7 +81,8 @@
   <div id="list"></div>
   <form id="bar">
     <input id="new" placeholder="Add a todo…" autocomplete="off">
-    <button>Add</button>
+    <button id="cancel" type="button" hidden>✕</button>
+    <button id="go">Add</button>
   </form>
 </div>
 <form id="tokform" hidden>
@@ -104,6 +107,7 @@
 
   var token = null, tabs = store.get("todo-cache", {}), current = store.get("todo-tab", null);
   var outbox = store.get("todo-outbox", []), sending = false;
+  var editing = null;  // item currently loaded into the input, or null
 
   try {
     var fromUrl = new URLSearchParams(location.search).get("key");
@@ -118,7 +122,9 @@
       tokform = document.getElementById("tokform"),
       tabsEl = document.getElementById("tabs"),
       listEl = document.getElementById("list"),
-      newEl = document.getElementById("new");
+      newEl = document.getElementById("new"),
+      goEl = document.getElementById("go"),
+      cancelEl = document.getElementById("cancel");
 
   function list() {
     return fetch(API + "?token=" + encodeURIComponent(token))
@@ -174,10 +180,9 @@
       var items = fresh[op.tab];
       if (!items) return;
       if (op.action === "add") items.push([null, op.text]);
-      if (op.action === "done") {
-        var i = items.findIndex(function (x) { return x[1] === op.text; });
-        if (i >= 0) items.splice(i, 1);
-      }
+      var i = items.findIndex(function (x) { return x[1] === op.text; });
+      if (op.action === "done" && i >= 0) items.splice(i, 1);
+      if (op.action === "edit" && i >= 0) items[i][1] = op.new_text;
     });
     return fresh;
   }
@@ -213,7 +218,7 @@
       var b = document.createElement("button");
       b.textContent = n;
       b.className = n === current ? "on" : "";
-      b.onclick = function () { current = n; render(); };
+      b.onclick = function () { current = n; stopEdit(); render(); };
       tabsEl.appendChild(b);
     });
     listEl.innerHTML = "";
@@ -222,7 +227,7 @@
     items.forEach(function (it) {
       var text = it[1];
       var row = document.createElement("div");
-      row.className = "item";
+      row.className = "item" + (it === editing ? " editing" : "");
       var tick = document.createElement("button");
       tick.className = "tick";
       tick.onclick = function () {
@@ -234,15 +239,45 @@
       var span = document.createElement("span");
       span.className = "txt";
       span.textContent = text;
+      span.onclick = function () { startEdit(it); };
       row.appendChild(tick); row.appendChild(span);
       listEl.appendChild(row);
     });
   }
 
+  function startEdit(it) {
+    editing = it;
+    newEl.value = it[1];
+    goEl.textContent = "Save";
+    cancelEl.hidden = false;
+    render();
+    newEl.focus();
+  }
+
+  function stopEdit() {
+    if (!editing) return;
+    editing = null;
+    newEl.value = "";
+    goEl.textContent = "Add";
+    cancelEl.hidden = true;
+  }
+
+  cancelEl.onclick = function () { stopEdit(); render(); };
+
   document.getElementById("bar").onsubmit = function (ev) {
     ev.preventDefault();
     var text = newEl.value.trim();
     if (!text || !current) return;
+    if (editing) {
+      var it = editing, old = it[1];
+      stopEdit();
+      if (text !== old) {
+        it[1] = text;
+        enqueue({ action: "edit", tab: current, text: old, new_text: text });
+      }
+      render();
+      return;
+    }
     newEl.value = "";
     tabs[current] = (tabs[current] || []).concat([[null, text]]);
     render();
