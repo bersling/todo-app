@@ -298,7 +298,12 @@
     });
 
     listEl.innerHTML = "";
-    var items = (tabs[current] || []).slice().sort(function (a, b) { return (b.today ? 1 : 0) - (a.today ? 1 : 0); });
+    // today items stay on top in their stored order; the rest is alphabetical
+    var rows = tabs[current] || [];
+    var items = rows.filter(function (x) { return x.today; }).concat(
+      rows.filter(function (x) { return !x.today; }).sort(function (a, b) {
+        return a.text.localeCompare(b.text, "de", { sensitivity: "base" });
+      }));
     shown = items;
     sel = keepSelection(items);
     if (!items.length) listEl.innerHTML = '<div id="empty">Nothing here. Add one below.</div>';
