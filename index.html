@@ -423,10 +423,12 @@
   // Ticking does not delete: done_at is stamped and the item drops into the
   // Completed section, where ticking again brings it back.
   function complete(it) {
-    var idx = shown.indexOf(it), el = rowEl(it);
+    var el = rowEl(it);
     if (el) el.classList.add("out");
     it.done_at = it.done_at ? null : new Date().toISOString();
-    if (sel === it) sel = shown[idx + 1] || shown[idx - 1] || null;
+    // the item still exists, it only moves section, so the selection stays
+    // with it — pressing d again undoes the tick. If it lands in a collapsed
+    // Completed section, render drops the selection instead.
     setTimeout(render, el ? 150 : 0);
     write(byId(it).then(function (id) {
       return rest("todos?id=eq." + id, { method: "PATCH", body: { done_at: it.done_at }, prefer: "return=minimal" });
