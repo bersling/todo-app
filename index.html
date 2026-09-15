@@ -87,6 +87,33 @@
   .item.today .star { color: var(--star); }
   @media (pointer: coarse) { .star { opacity: 1; } }
 
+  /* who: hard-coded C / D bubbles, only on the list that uses them */
+  .who { flex: none; display: flex; gap: 4px; margin-top: 0.12em; }
+  .bub {
+    width: 21px; height: 21px; border-radius: 50%; border: 1.5px solid var(--faint);
+    font-size: 11px; line-height: 18px; text-align: center;
+    color: var(--muted); font-weight: 600;
+  }
+  .bub:hover { border-color: var(--accent); color: var(--accent); }
+  .bub.on { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+  @media (pointer: coarse) { .bub { width: 26px; height: 26px; line-height: 23px; font-size: 12px; } }
+
+  /* completed items, below the open ones */
+  .item.done .txt { text-decoration: line-through; color: var(--muted); }
+  .item.done .tick { border-color: var(--accent); background: var(--accent); }
+  .item.done .tick::after {
+    content: ""; position: absolute; left: 5.5px; top: 1.5px; width: 4px; height: 8px;
+    border: solid var(--bg); border-width: 0 1.5px 1.5px 0; transform: rotate(45deg);
+  }
+  #donehdr {
+    display: flex; align-items: center; gap: 7px; width: 100%; text-align: left;
+    padding: 14px var(--pad) 6px; color: var(--muted);
+    font-size: 0.82em; letter-spacing: 0.06em; text-transform: uppercase;
+  }
+  #donehdr:hover { color: var(--fg); }
+  #donehdr .chev { display: inline-block; transition: transform .15s; font-size: 1.1em; }
+  #donehdr.closed .chev { transform: rotate(-90deg); }
+
   /* thin divider between today items and the rest */
   .divider { border-top: 1px dashed var(--faint); margin: 6px var(--pad); }
 
@@ -137,7 +164,9 @@
     <kbd>a</kbd><span>add</span>
     <kbd>e ↵</kbd><span>edit</span>
     <kbd>t</kbd><span>flag for today</span>
-    <kbd>d</kbd><span>done</span>
+    <kbd>d</kbd><span>done / undone</span>
+    <kbd>C D</kbd><span>assign (MOVE list)</span>
+    <kbd>U</kbd><span>unassign</span>
     <kbd>r</kbd><span>refresh</span>
     <kbd>o</kbd><span>open the table</span>
     <kbd>esc</kbd><span>leave the add box, clear selection</span>
@@ -166,12 +195,16 @@
     del: function (k) { try { localStorage.removeItem(k); } catch (e) {} }
   };
 
-  // tabs: {list name: [{id, text, today}, ...]} — painted from cache on open
+  // The one list that tracks who does what, with C / D bubbles per row.
+  var ASSIGNEE_LIST = "MOVE";
+
+  // tabs: {list name: [{id, text, today, assignee, done_at}, ...]} — from cache on open
   var tabs = store.get("todo-cache", {}), current = store.get("todo-tab", null);
+  var doneOpen = store.get("todo-done-open", true);
   var session = store.get("todo-session", null);
   var editing = null;   // item being edited in place, or null
   var sel = null;       // keyboard-selected item, or null
-  var shown = [];       // items of the current tab in display order (today first)
+  var shown = [];       // items of the current tab in display order (open, then completed)
 
   var app = document.getElementById("app"),
       login = document.getElementById("login"),
@@ -236,12 +269,13 @@
   function list() {
     return Promise.all([
       rest("lists?select=name&order=position,name"),
-      rest("todos?select=id,list,text,today&order=position,created_at")
+      rest("todos?select=id,list,text,today,assignee,done_at&order=position,created_at")
     ]).then(function (res) {
       var fresh = {};
       res[0].forEach(function (l) { fresh[l.name] = []; });
       res[1].forEach(function (r) {
-        (fresh[r.list] = fresh[r.list] || []).push({ id: r.id, text: r.text, today: r.today });
+        (fresh[r.list] = fresh[r.list] || []).push({
+          id: r.id, text: r.text, today: r.today, assignee: r.assignee, done_at: r.done_at });
       });
       return fresh;
     });
@@ -298,15 +332,20 @@
     });
 
     listEl.innerHTML = "";
-    // today items stay on top in their stored order; the rest is alphabetical
     var rows = tabs[current] || [];
-    var items = rows.filter(function (x) { return x.today; }).concat(
-      rows.filter(function (x) { return !x.today; }).sort(function (a, b) {
+    var open = rows.filter(function (x) { return !x.done_at; });
+    // today items stay on top in their stored order; the rest is alphabetical
+    var items = open.filter(function (x) { return x.today; }).concat(
+      open.filter(function (x) { return !x.today; }).sort(function (a, b) {
         return a.text.localeCompare(b.text, "de", { sensitivity: "base" });
       }));
-    shown = items;
-    sel = keepSelection(items);
-    if (!items.length) listEl.innerHTML = '<div id="empty">Nothing here. Add one below.</div>';
+    // completed below, most recently ticked first
+    var done = rows.filter(function (x) { return x.done_at; }).sort(function (a, b) {
+      return a.done_at < b.done_at ? 1 : a.done_at > b.done_at ? -1 : 0;
+    });
+    shown = doneOpen ? items.concat(done) : items;
+    sel = keepSelection(shown);
+    if (!rows.length) listEl.innerHTML = '<div id="empty">Nothing here. Add one below.</div>';
     var todayCount = items.filter(function (x) { return x.today; }).length;
     items.forEach(function (it, idx) {
       if (idx === todayCount && todayCount > 0) {
@@ -315,13 +354,32 @@
       }
       listEl.appendChild(row(it));
     });
+    if (done.length) {
+      listEl.appendChild(doneHeader(done.length));
+      if (doneOpen) done.forEach(function (it) { listEl.appendChild(row(it)); });
+    }
+  }
+
+  function doneHeader(n) {
+    var b = document.createElement("button");
+    b.id = "donehdr"; b.className = doneOpen ? "" : "closed";
+    var chev = document.createElement("span");
+    chev.className = "chev"; chev.textContent = "\u25be";
+    b.appendChild(chev);
+    b.appendChild(document.createTextNode("Completed (" + n + ")"));
+    b.onclick = function () {
+      doneOpen = !doneOpen; store.set("todo-done-open", doneOpen); render();
+    };
+    return b;
   }
 
   function row(it) {
     var el = document.createElement("div");
-    el.className = "item" + (it === sel ? " sel" : "") + (it.today ? " today" : "");
+    el.className = "item" + (it === sel ? " sel" : "") + (it.today ? " today" : "")
+                 + (it.done_at ? " done" : "");
     var tick = document.createElement("button");
-    tick.className = "tick"; tick.title = "Done"; tick.setAttribute("aria-label", "Done");
+    var label = it.done_at ? "Not done" : "Done";
+    tick.className = "tick"; tick.title = label; tick.setAttribute("aria-label", label);
     tick.onclick = function () { complete(it); };
     var span = document.createElement("span");
     span.className = "txt";
@@ -330,27 +388,57 @@
     star.className = "star"; star.title = "Today";
     star.textContent = it.today ? "★" : "☆";
     star.onclick = function () { toggleToday(it); };
-    // the whole row edits, except the circle and the star
+    // the whole row edits, except the buttons sitting in it
     el.onclick = function (ev) {
-      if (ev.target === tick || ev.target === star) return;
+      if (ev.target.closest && ev.target.closest("button")) return;
       sel = it;
       startEdit(it, el, span);
     };
-    el.appendChild(tick); el.appendChild(span); el.appendChild(star);
+    el.appendChild(tick); el.appendChild(span);
+    if (current === ASSIGNEE_LIST) el.appendChild(bubbles(it));
+    el.appendChild(star);
     return el;
+  }
+
+  // One field holds the assignee, so picking a person drops the other one;
+  // tapping the bubble that is already on clears it.
+  function bubbles(it) {
+    var wrap = document.createElement("span");
+    wrap.className = "who";
+    ["C", "D"].forEach(function (who) {
+      var b = document.createElement("button");
+      b.className = "bub" + (it.assignee === who ? " on" : "");
+      b.textContent = who;
+      b.title = it.assignee === who ? "Unassign " + who : "Assign " + who;
+      b.onclick = function () { assign(it, who); };
+      wrap.appendChild(b);
+    });
+    return wrap;
   }
 
   function rowEl(it) { return listEl.querySelectorAll(".item")[shown.indexOf(it)]; }
 
   // ---- actions, shared by mouse and keyboard
 
+  // Ticking does not delete: done_at is stamped and the item drops into the
+  // Completed section, where ticking again brings it back.
   function complete(it) {
     var idx = shown.indexOf(it), el = rowEl(it);
     if (el) el.classList.add("out");
-    tabs[current] = tabs[current].filter(function (x) { return x !== it; });
+    it.done_at = it.done_at ? null : new Date().toISOString();
     if (sel === it) sel = shown[idx + 1] || shown[idx - 1] || null;
     setTimeout(render, el ? 150 : 0);
-    write(byId(it).then(function (id) { return rest("todos?id=eq." + id, { method: "DELETE" }); }));
+    write(byId(it).then(function (id) {
+      return rest("todos?id=eq." + id, { method: "PATCH", body: { done_at: it.done_at }, prefer: "return=minimal" });
+    }));
+  }
+
+  function assign(it, who) {
+    it.assignee = it.assignee === who ? null : who;
+    render();
+    write(byId(it).then(function (id) {
+      return rest("todos?id=eq." + id, { method: "PATCH", body: { assignee: it.assignee }, prefer: "return=minimal" });
+    }));
   }
 
   function toggleToday(it) {
@@ -362,7 +450,7 @@
   }
 
   function add(text) {
-    var it = { id: null, text: text, today: false };
+    var it = { id: null, text: text, today: false, assignee: null, done_at: null };
     tabs[current] = (tabs[current] || []).concat([it]);
     render();
     write(rest("todos", { method: "POST", body: { list: current, text: text }, prefer: "return=representation" })
@@ -372,7 +460,7 @@
   // An item added a moment ago may not have its id yet: look it up by text.
   function byId(it) {
     if (it.id) return Promise.resolve(it.id);
-    var q = "todos?select=id&list=eq." + encodeURIComponent(current) + "&text=eq." + encodeURIComponent(it.text) + "&limit=1";
+    var q = "todos?select=id&done_at=is.null&list=eq." + encodeURIComponent(current) + "&text=eq." + encodeURIComponent(it.text) + "&limit=1";
     return rest(q).then(function (rows) {
       if (!rows || !rows.length) throw new Error("not found: " + it.text);
       return (it.id = rows[0].id);
@@ -453,6 +541,8 @@
       case "e": case "Enter": if (sel) startEdit(sel, rowEl(sel), rowEl(sel).querySelector(".txt")); break;
       case "t": if (sel) toggleToday(sel); break;
       case "d": if (sel) complete(sel); break;
+      case "C": case "D": if (sel && current === ASSIGNEE_LIST) assign(sel, ev.key); break;
+      case "U": if (sel && current === ASSIGNEE_LIST && sel.assignee) assign(sel, sel.assignee); break;
       case "r": refresh(); break;
       case "o": window.open(TABLE_URL, "_blank"); break;
       case "?": helpEl.hidden = !helpEl.hidden; break;
