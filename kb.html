@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>keyboard bar test</title>
+<style>
+  body { font: 17px/1.4 -apple-system, system-ui, sans-serif; margin: 0; padding: 16px; background: #151614; color: #ebebe6; }
+  h1 { font-size: 17px; margin: 0 0 4px; }
+  p { color: #8b8f92; margin: 0 0 16px; font-size: 14px; }
+  section { margin-bottom: 22px; }
+  label { display: block; font-size: 13px; color: #8b8f92; margin-bottom: 6px; }
+  input, textarea, [contenteditable] { display: block; width: 100%; box-sizing: border-box; font: inherit; color: inherit; background: #222523; border: 1.5px solid #4d5155; border-radius: 10px; padding: 10px 12px; min-height: 44px; outline: none; }
+  input:focus, textarea:focus, [contenteditable]:focus { border-color: #6fbf97; }
+  .pad { height: 60vh; }
+</style>
+</head>
+<body>
+<h1>Keyboard bar test</h1>
+<p>Tap each field. Note which ones show the ^ v ✓ bar above the keyboard.</p>
+
+<section><label>A · input inside a form (what the app has)</label>
+<form onsubmit="return false"><input placeholder="A"></form></section>
+
+<section><label>B · input, no form</label>
+<input placeholder="B"></section>
+
+<section><label>C · contenteditable div</label>
+<div contenteditable="plaintext-only" id="c"></div></section>
+
+<section><label>D · input, inputmode none → text after focus</label>
+<input placeholder="D" id="d"></section>
+
+<section><label>E · input, readonly until touched</label>
+<input placeholder="E" id="e" readonly></section>
+
+<section><label>F · textarea</label>
+<textarea rows="1" placeholder="F"></textarea></section>
+
+<section><label>G · input type=search</label>
+<input type="search" placeholder="G"></section>
+
+<div class="pad"></div>
+<script>
+  var d = document.getElementById("d");
+  d.addEventListener("focus", function () {
+    d.setAttribute("inputmode", "none");
+    setTimeout(function () { d.setAttribute("inputmode", "text"); }, 100);
+  });
+  var e = document.getElementById("e");
+  e.addEventListener("touchstart", function () { e.removeAttribute("readonly"); });
+  e.addEventListener("blur", function () { e.setAttribute("readonly", ""); });
+</script>
+</body>
+</html>
