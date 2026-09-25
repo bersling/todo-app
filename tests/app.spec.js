@@ -18,14 +18,16 @@ test.beforeEach(async ({ page }, info) => {
 const act = (loc) => (touch ? loc.tap() : loc.click());
 const texts = (page) => page.locator(".item:not(.done) .txt").allTextContents();
 const settle = (page) => page.waitForTimeout(250);
+const doneCount = (page) => page.locator("#donehdr .n");
 
 test("lists, order and the completed section", async ({ page }) => {
   await expect(page.locator("#tabs button")).toHaveText(["INBOX", "MOVE"]);
   await expect(page.locator("#tabs button.on")).toHaveText("INBOX");
   expect(await texts(page)).toEqual(OPEN);
   await expect(page.locator(".item.today .txt")).toHaveText("Zebra first (today)");
-  await expect(page.locator("#donehdr")).toContainText("Completed (1)");
+  await expect(doneCount(page)).toHaveText("1");
   await expect(page.locator(".item.done .txt")).toHaveText("Old done thing");
+  await expect(page.locator("#count")).toHaveText("4 open");
 });
 
 test("adding from the bar keeps the keyboard in the box", async ({ page }) => {
@@ -133,12 +135,16 @@ test("a refresh that lands during an edit does not clobber it", async ({ page })
 test("ticking moves an item to completed and back", async ({ page }) => {
   const milk = page.locator(".item", { hasText: "Buy milk" });
   await act(milk.locator(".tick"));
-  await expect(page.locator("#donehdr")).toContainText("Completed (2)");
+  // the tick lands and the strike draws before the row leaves
+  await expect(milk).toHaveClass(/ticking/);
+  await expect(doneCount(page)).toHaveText("2");
   await expect(page.locator(".item.done .txt").first()).toHaveText("Buy milk");
+  await expect(page.locator("#toast")).toHaveClass(/show/);
+  await expect(page.locator("#toastmsg")).toHaveText("Done");
   await settle(page);
   expect(m.db.todos.find((r) => r.id === "b1").done_at).toBeTruthy();
   await act(page.locator(".item.done", { hasText: "Buy milk" }).locator(".tick"));
-  await expect(page.locator("#donehdr")).toContainText("Completed (1)");
+  await expect(doneCount(page)).toHaveText("1");
   await settle(page);
   expect(m.db.todos.find((r) => r.id === "b1").done_at).toBeNull();
   expect(await texts(page)).toEqual(OPEN);
@@ -175,7 +181,7 @@ test("the circle sits on the text's first line and the check sits in the circle"
   const rgb = (s) => s.match(/\d+/g).slice(0, 3).map(Number);
   const [bgc, accent] = await page.evaluate(() => [
     getComputedStyle(document.body).backgroundColor,
-    getComputedStyle(document.querySelector(".item.done .tick")).backgroundColor,
+    getComputedStyle(document.querySelector(".item.done .tick .fill")).backgroundColor,
   ]).then((a) => a.map(rgb));
   const dist = (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]);
   let minX = 1e9, maxX = -1, minY = 1e9, maxY = -1, n = 0;
@@ -225,10 +231,10 @@ test("keyboard: the selection follows the item through an edit, the pointer clea
   expect(m.patches("b1").map((c) => c.body)).toEqual([{ text: "Zzz milk" }, { today: true }]);
   await expect(page.locator(".item.sel")).toHaveClass(/today/);
   await page.keyboard.press("d");
-  await expect(page.locator("#donehdr")).toContainText("Completed (2)");
+  await expect(doneCount(page)).toHaveText("2");
   await expect(page.locator(".item.sel .txt")).toHaveText("Zzz milk");
   await page.keyboard.press("d");
-  await expect(page.locator("#donehdr")).toContainText("Completed (1)");
+  await expect(doneCount(page)).toHaveText("1");
   // a click hides the selection bar; the next key brings it back on that item
   await page.locator(".item", { hasText: "Call mum" }).locator(".txt").click();
   await expect(page.locator(".item.sel")).toHaveCount(0);
@@ -237,10 +243,76 @@ test("keyboard: the selection follows the item through an edit, the pointer clea
   await expect(page.locator(".item.sel")).toHaveCount(1);
 });
 
+test("undo brings a ticked item back", async ({ page }) => {
+  await act(page.locator(".item", { hasText: "Call mum" }).locator(".tick"));
+  await expect(doneCount(page)).toHaveText("2");
+  await act(page.locator("#undo"));
+  await expect(doneCount(page)).toHaveText("1");
+  await expect(page.locator("#toast")).not.toHaveClass(/show/);
+  await settle(page);
+  expect(m.patches("c1").map((c) => c.body.done_at === null)).toEqual([false, true]);
+  expect(await texts(page)).toEqual(OPEN);
+});
+
+test("delete with x, undo re-creates the item", async ({ page }) => {
+  test.skip(touch, "desktop keys");
+  await page.keyboard.press("j");
+  await page.keyboard.press("j");
+  await expect(page.locator(".item.sel .txt")).toHaveText("Ärger melden");
+  await page.keyboard.press("x");
+  await expect(page.locator(".item", { hasText: "Ärger melden" })).toHaveCount(0);
+  await expect(page.locator("#toastmsg")).toHaveText("Deleted");
+  // the selection moved on to the next item
+  await expect(page.locator(".item.sel .txt")).toHaveText("Buy milk");
+  await settle(page);
+  expect(m.calls.filter((c) => c.method === "DELETE").map((c) => c.path)).toEqual(["todos?id=eq.a1"]);
+  await page.keyboard.press("u");
+  await expect(page.locator(".item", { hasText: "Ärger melden" })).toHaveCount(1);
+  await settle(page);
+  const back = m.posts().map((c) => c.body);
+  expect(back).toEqual([{ list: "INBOX", text: "Ärger melden", today: false, assignee: null, done_at: null }]);
+  expect(await texts(page)).toEqual(OPEN);
+});
+
+test("swipe right completes, swipe left deletes", async ({ page }) => {
+  test.skip(touch, "dragged with the mouse; touch drags are not scriptable in WebKit here");
+  const drag = async (text, dx) => {
+    const box = await page.locator(".item", { hasText: text }).locator(".txt").boundingBox();
+    const x = box.x + 20, y = box.y + box.height / 2;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    for (let i = 1; i <= 6; i++) await page.mouse.move(x + (dx * i) / 6, y);
+    await page.mouse.up();
+  };
+  await drag("Buy milk", 140);
+  await expect(doneCount(page)).toHaveText("2");
+  await expect(page.locator(".item.editing")).toHaveCount(0);
+  await drag("Call mum", -140);
+  await expect(page.locator(".item", { hasText: "Call mum" })).toHaveCount(0);
+  await expect(page.locator("#toastmsg")).toHaveText("Deleted");
+  // a short drag is not a swipe: nothing happens, and it is not a tap either
+  await drag("Ärger melden", 30);
+  await settle(page);
+  await expect(page.locator(".item", { hasText: "Ärger melden" })).toHaveCount(1);
+  await expect(page.locator(".item.editing")).toHaveCount(0);
+  await settle(page);
+  expect(m.patches("b1").map((c) => c.body.done_at !== null)).toEqual([true]);
+  expect(m.calls.filter((c) => c.method === "DELETE").map((c) => c.path)).toEqual(["todos?id=eq.c1"]);
+});
+
 test("screenshots for a look", async ({ page }, info) => {
   await page.screenshot({ path: `shots/${info.project.name}-light.png` });
   await page.emulateMedia({ colorScheme: "dark" });
+  await page.waitForTimeout(300);   // let the colour transitions finish
   await page.screenshot({ path: `shots/${info.project.name}-dark.png` });
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.waitForTimeout(300);
   await act(page.locator(".item", { hasText: "Buy milk" }).locator(".txt"));
   await page.screenshot({ path: `shots/${info.project.name}-editing.png` });
+  await page.keyboard.press("Escape");
+  await act(page.locator(".item", { hasText: "Call mum" }).locator(".tick"));
+  await page.waitForTimeout(380);
+  await page.screenshot({ path: `shots/${info.project.name}-ticking.png` });
+  await expect(page.locator("#toast")).toHaveClass(/show/);
+  await page.screenshot({ path: `shots/${info.project.name}-toast.png` });
 });

@@ -59,6 +59,11 @@ async function mock(page, opts = {}) {
       db.todos.push(row);
       return json([row], 201);
     }
+    if (path === "todos" && method === "DELETE") {
+      const id = (q.get("id") || "").replace(/^eq\./, "");
+      db.todos = db.todos.filter((r) => r.id !== id);
+      return route.fulfill({ status: 204, body: "" });
+    }
     if (path === "todos" && method === "PATCH") {
       const id = (q.get("id") || "").replace(/^eq\./, "");
       const row = db.todos.find((r) => r.id === id);

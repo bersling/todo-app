@@ -9,30 +9,38 @@ signed-in user at the rows.
 
 ## How it behaves
 
-- Tap the circle to complete. Ticking does not delete: `done_at` is
-  stamped and the item drops into a collapsible **Completed** section
-  under the open ones, newest first, where ticking again brings it back.
+- Tap the circle to complete. The ring fills, the check draws, a strike
+  runs across the text and the row folds into the collapsible
+  **Completed** section under the open ones, newest first. A short
+  "Done" bar offers **Undo**; ticking a completed item also brings it
+  back. Ticking does not delete: `done_at` is stamped.
+- Swipe a row right to complete it, left to delete it. Deleting is final
+  on the server, so the "Deleted" bar's **Undo** re-creates the item.
 - Tap the row to edit in place. Enter, or tapping anywhere else (another
   row, a circle, the add box), saves; Escape puts the old text back; an
   emptied item keeps its text. The list is only re-sorted once the write
-  has settled, never under your finger.
-- Tap the star to flag for today. Today items sit on top, bold, above a
-  divider; everything else is alphabetical (ä sorts as a).
-- The add box at the bottom keeps the keyboard up after Enter or `+`, so
-  several items go in one after the other.
+  has settled, never under your finger, and never while a row animates.
+- Tap the star to flag for today. Today items sit on top, bold, with a
+  gap below them; everything else is alphabetical (ä sorts as a).
+- The list names across the top are the tabs; the count of open items
+  sits at the right. The add box at the bottom keeps the keyboard up
+  after Enter or `+`, so several items go in one after the other.
 - Writes are optimistic and settle on the next fetch; nothing fetched is
   painted while a write is in flight or an edit is open. Refresh on
   foreground and every 2 minutes; the last state is painted from
-  localStorage on open.
+  localStorage on open. Reduced motion is respected.
 - The **MOVE** list additionally shows two hard-coded `C` / `D` bubbles
   per row for who does what — one `assignee` field, so picking one person
   drops the other, and tapping the bubble that is already on clears it.
+- Type is Archivo (Google Fonts, one family at two widths: the condensed
+  cut for the list names); offline it falls back to the system font.
 
 Works as a desktop pane too (a narrow window): the TUI's keys are wired up —
 `j`/`k` move, `h`/`l`/`tab`/`1`-`9` switch list, `a` add, `e`/`enter` edit
-in place, `t` today, `d` done/undone, `C`/`D` assign and `U` unassign (on
-MOVE), `r` refresh, `o` open the table, `?` shows the list. The selection
-bar only shows while the keyboard is in use; a tap or click hides it.
+in place, `t` today, `d` done/undone, `x`/`⌫` delete, `u` undo the last
+done or delete, `C`/`D` assign and `U` unassign (on MOVE), `r` refresh,
+`o` open the table, `?` shows the list. The selection bar only shows
+while the keyboard is in use; a tap or click hides it.
 
 ## Tests
 

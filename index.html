@@ -2,202 +2,276 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<meta name="theme-color" content="#f3f4f1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f2f3f0" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#151614" media="(prefers-color-scheme: dark)">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="mobile-web-app-capable" content="yes">
 <title>TODO</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✅</text></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='44' fill='%232b6e58'/><path d='M30 52l13 13 27-30' fill='none' stroke='%23fff' stroke-width='10' stroke-linecap='round' stroke-linejoin='round'/></svg>">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&display=swap">
 <style>
   :root {
-    --bg: #f3f4f1; --fg: #191b1e; --muted: #7d8288; --faint: #b9bdc2;
-    --line: #dfe2de; --accent: #2b6e58; --sel: #e6ebe4; --star: #d69a1e;
-    --err: #b5433b;
-    --size: 15px; --lh: 1.45; --pad: 10px; --tick: 18px;
+    --bg: #f2f3f0; --fg: #16181a; --muted: #767b80; --faint: #b4b8bc;
+    --line: #dfe2de; --row: #e2e6e0; --accent: #2b6e58; --on-accent: #f2f3f0;
+    --star: #d69a1e; --err: #b5433b; --del: #b5433b;
+    --size: 16px; --lh: 1.4; --gutter: 14px; --tick: 22px; --radius: 10px;
+    --ease: cubic-bezier(.2, .7, .2, 1);
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #17181a; --fg: #e6e6e3; --muted: #85898f; --faint: #4b4f55;
-      --line: #2a2c30; --accent: #6fbf97; --sel: #23262a; --star: #e2ad3a;
+      --bg: #151614; --fg: #ebebe6; --muted: #8b8f92; --faint: #4d5155;
+      --line: #2a2d2b; --row: #222523; --accent: #6fbf97; --on-accent: #151614;
+      --star: #e2ad3a; --err: #d9736a; --del: #d9736a;
     }
   }
-  /* touch screens: roomier */
-  @media (pointer: coarse) { :root { --size: 17px; --pad: 14px; --tick: 22px; } }
+  @media (pointer: coarse) { :root { --size: 17px; --gutter: 16px; --tick: 24px; } }
 
   * { box-sizing: border-box; margin: 0; }
   [hidden] { display: none !important; }
   html, body { height: 100%; }
   body {
     background: var(--bg); color: var(--fg);
-    font: var(--size)/var(--lh) -apple-system, system-ui, "Helvetica Neue", sans-serif;
+    font: 450 var(--size)/var(--lh) Archivo, -apple-system, system-ui, "Helvetica Neue", sans-serif;
+    font-variation-settings: "wdth" 100;
     display: flex; flex-direction: column;
     -webkit-font-smoothing: antialiased;
     -webkit-tap-highlight-color: transparent;
+    overscroll-behavior: none;
   }
   button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; touch-action: manipulation; }
   button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  svg { display: block; }
 
   #app { display: flex; flex-direction: column; flex: 1; min-height: 0; position: relative; }
 
-  /* tabs: a row of words, the current one underlined */
-  #tabs {
-    display: flex; gap: 2px; padding: 10px var(--pad) 0; overflow-x: auto; flex: none;
-    border-bottom: 1px solid var(--line); scrollbar-width: none;
+  /* The list names are the one piece of display type: heavy, condensed,
+     big. The current list is ink, the others step back. */
+  #head {
+    flex: none; display: flex; align-items: baseline; gap: 4px;
+    padding: calc(14px + env(safe-area-inset-top)) var(--gutter) 6px;
+    overflow-x: auto; scrollbar-width: none;
   }
-  #tabs::-webkit-scrollbar { display: none; }
+  #head::-webkit-scrollbar { display: none; }
+  #tabs { display: flex; gap: 2px; min-width: 0; }
   #tabs button {
-    padding: 6px 8px 8px; color: var(--muted); white-space: nowrap;
-    border-bottom: 2px solid transparent; margin-bottom: -1px; letter-spacing: 0.01em;
+    font-size: 27px; line-height: 1; font-weight: 750; letter-spacing: -0.01em;
+    font-variation-settings: "wdth" 68;
+    color: var(--faint); padding: 4px 6px; margin-left: -6px; border-radius: 6px;
+    white-space: nowrap; transition: color .15s;
   }
-  #tabs button.on { color: var(--fg); border-bottom-color: var(--fg); }
+  #tabs button + button { margin-left: 4px; }
+  #tabs button.on { color: var(--fg); }
+  #count {
+    margin-left: auto; padding-left: 12px; color: var(--muted);
+    font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap;
+  }
 
   /* list */
-  #list { flex: 1; overflow-y: auto; padding: 4px 0 8px; }
-  .item {
-    display: flex; align-items: flex-start; gap: 10px;
-    padding: calc(var(--pad) * 0.7) var(--pad) calc(var(--pad) * 0.7) calc(var(--pad) - 3px);
-    border-left: 3px solid transparent; border-bottom: 1px solid var(--line);
+  #list { flex: 1; overflow-y: auto; padding: 4px 0 12px; overscroll-behavior: contain; }
+  .item { position: relative; margin: 0 6px; border-radius: var(--radius); overflow: hidden; }
+  .item .row {
+    position: relative; display: flex; align-items: flex-start; gap: 12px;
+    padding: 10px calc(var(--gutter) - 6px);
+    background: var(--bg); border-radius: var(--radius);
     cursor: text; -webkit-user-select: none; user-select: none;
+    touch-action: pan-y;
+    transition: background .15s, transform .2s var(--ease);
   }
-  .item:last-child { border-bottom: 0; }
-  .item.sel { background: var(--sel); border-left-color: var(--accent); }
-  .item.out { opacity: 0; transform: translateX(8px); transition: opacity .15s, transform .15s; }
-  .item.editing { background: var(--sel); }
-  .item.today .txt { font-weight: 600; }
+  .item.sel .row { background: var(--row); box-shadow: inset 3px 0 0 var(--accent); }
+  .item.editing .row { background: var(--row); }
+  .item.today .txt { font-weight: 640; }
+  .item.swiping .row { transition: none; }
 
-  /* The controls in a row are sized off the text's line height so they sit
-     centred on the first line, however many lines the item wraps to. The
-     ::before block on each is an invisible, larger tap target. */
-  .tick, .star, .bub { position: relative; }
-  .tick::before, .star::before { content: ""; position: absolute; inset: -9px; }
-  .bub::before { content: ""; position: absolute; inset: -7px -2px; }
+  /* what shows behind a row while it is dragged sideways */
+  .under {
+    position: absolute; inset: 0; display: flex; align-items: center;
+    padding: 0 var(--gutter); color: var(--on-accent); opacity: 0;
+  }
+  .under.do { background: var(--accent); justify-content: flex-start; }
+  .under.rm { background: var(--del); justify-content: flex-end; }
+  .under svg { width: 20px; height: 20px; }
+  .under path { fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+  .item.swipe-r .under.do, .item.swipe-l .under.rm { opacity: 1; }
 
+  /* the tick: a ring that fills from the centre, then the check draws */
   .tick {
-    flex: none; font-size: var(--tick); width: 1em; height: 1em; border-radius: 50%;
+    position: relative; flex: none; width: var(--tick); height: var(--tick); border-radius: 50%;
     margin-top: calc((var(--size) * var(--lh) - var(--tick)) / 2);
     border: 1.5px solid var(--faint); display: grid; place-items: center;
-    transition: background .12s, border-color .12s;
+    transition: border-color .15s;
   }
-  .txt { flex: 1; min-width: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+  .tick::before { content: ""; position: absolute; inset: -10px; }   /* larger tap target */
+  .tick .fill {
+    position: absolute; inset: -1.5px; border-radius: 50%; background: var(--accent);
+    transform: scale(0); transition: transform .28s var(--ease);
+  }
+  .tick svg { position: relative; width: 60%; height: 60%; }
+  .tick path {
+    fill: none; stroke: var(--on-accent); stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round;
+    stroke-dasharray: 24; stroke-dashoffset: 24; transition: stroke-dashoffset .22s .16s var(--ease);
+  }
+  .item.done .tick, .item.ticking .tick { border-color: var(--accent); }
+  .item.done .tick .fill, .item.ticking .tick .fill { transform: scale(1); }
+  .item.done .tick path, .item.ticking .tick path { stroke-dashoffset: 0; }
+
+  .txt { flex: 1; min-width: 0; overflow-wrap: anywhere; white-space: pre-wrap; padding-top: 0; }
   .txt:focus { outline: none; }
-  .item.editing .txt { caret-color: var(--accent); -webkit-user-select: text; user-select: text; }
+  .item.editing .txt { caret-color: var(--accent); -webkit-user-select: text; user-select: text; cursor: text; }
+  /* the strike draws across while the tick lands; done rows use a plain one */
+  .item.ticking .txt {
+    color: var(--muted);
+    background: linear-gradient(currentColor, currentColor) no-repeat 0 58% / 0% 1.5px;
+    animation: strike .32s .18s var(--ease) forwards;
+  }
+  @keyframes strike { to { background-size: 100% 1.5px; } }
+  .item.done .txt { text-decoration: line-through; text-decoration-thickness: 1.5px; color: var(--muted); }
+
+  /* folding a row away (after a tick or a delete) */
+  .item.out { transition: height .22s var(--ease), opacity .18s, margin .22s; opacity: 0; height: 0 !important; }
 
   .star {
-    flex: none; width: 22px; height: 22px; line-height: 22px;
-    margin-top: calc((var(--size) * var(--lh) - 22px) / 2);
-    text-align: center; font-size: 17px; color: var(--faint);
-    opacity: 0; transition: opacity .12s, color .12s;
+    flex: none; width: 24px; height: 24px; display: grid; place-items: center;
+    margin-top: calc((var(--size) * var(--lh) - 24px) / 2);
+    color: var(--faint); opacity: 0; transition: opacity .12s, color .12s, transform .15s var(--ease);
+    position: relative;
   }
+  .star::before { content: ""; position: absolute; inset: -8px; }
+  .star svg { width: 18px; height: 18px; }
+  .star path { fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linejoin: round; }
   .item.sel .star, .item.editing .star, .item.today .star { opacity: 1; }
   .item.today .star { color: var(--star); }
+  .item.today .star path { fill: currentColor; }
+  .item.done .star { visibility: hidden; }
   @media (pointer: coarse) { .star { opacity: 1; } }
 
-  /* who: hard-coded C / D bubbles, only on the list that uses them */
-  .who { flex: none; display: flex; gap: 4px; margin-top: calc((var(--size) * var(--lh) - 21px) / 2); }
+  /* who: C / D, only on the list that uses them */
+  .who { flex: none; display: flex; gap: 5px; margin-top: calc((var(--size) * var(--lh) - 22px) / 2); }
   .bub {
-    width: 21px; height: 21px; border-radius: 50%; border: 1.5px solid var(--faint);
-    font-size: 11px; line-height: 18px; text-align: center;
-    color: var(--muted); font-weight: 600;
+    position: relative; width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid var(--faint);
+    font-size: 11px; line-height: 19px; text-align: center; color: var(--muted); font-weight: 650;
+    transition: background .12s, border-color .12s, color .12s;
   }
-  .bub.on { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+  .bub::before { content: ""; position: absolute; inset: -7px -2px; }
+  .bub.on { background: var(--fg); border-color: var(--fg); color: var(--bg); }
   @media (pointer: coarse) {
     .who { margin-top: calc((var(--size) * var(--lh) - 26px) / 2); }
     .bub { width: 26px; height: 26px; line-height: 23px; font-size: 12px; }
   }
 
-  /* Hover effects only where a pointer can hover: on a touch screen they
-     would stick to whatever was tapped last. */
   @media (hover: hover) {
-    #tabs button:hover { color: var(--fg); }
+    #tabs button:hover { color: var(--muted); }
+    #tabs button.on:hover { color: var(--fg); }
+    .item:hover .row { background: var(--row); }
     .item:hover .star { opacity: 1; }
-    .star:hover { color: var(--star); }
-    .bub:hover { border-color: var(--accent); color: var(--accent); }
+    .star:hover { color: var(--star); transform: scale(1.12); }
+    .bub:hover { border-color: var(--fg); color: var(--fg); }
     .item:not(.done) .tick:hover { border-color: var(--accent); }
-    .item:not(.done) .tick:hover::after {
-      content: ""; width: .6em; height: .6em; border-radius: 50%; background: var(--accent);
-    }
+    .item:not(.done):not(.ticking) .tick:hover .fill { transform: scale(.45); }
     #donehdr:hover { color: var(--fg); }
     #plus:hover { color: var(--accent); }
+    #toast button:hover { color: var(--bg); }
   }
 
-  /* completed items, below the open ones */
-  .item.done .txt { text-decoration: line-through; color: var(--muted); }
-  .item.done .tick { border-color: var(--accent); background: var(--accent); }
-  .item.done .tick::after {
-    content: ""; width: .26em; height: .52em;
-    border: solid var(--bg); border-width: 0 .11em .11em 0;
-    transform: translateY(-.07em) rotate(45deg);
-  }
+  .gap { height: 10px; }
   #donehdr {
-    display: flex; align-items: center; gap: 7px; width: 100%; text-align: left;
-    padding: 14px var(--pad) 6px; color: var(--muted);
-    font-size: 0.82em; letter-spacing: 0.06em; text-transform: uppercase;
+    display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
+    margin-top: 10px; padding: 10px var(--gutter) 6px; color: var(--muted);
+    font-size: 13px; font-weight: 500;
   }
-  #donehdr .chev { display: inline-block; transition: transform .15s; font-size: 1.1em; }
+  #donehdr .n { color: var(--faint); font-variant-numeric: tabular-nums; }
+  #donehdr .chev { display: inline-block; width: 8px; height: 8px; transition: transform .15s var(--ease); }
+  #donehdr .chev path { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
   #donehdr.closed .chev { transform: rotate(-90deg); }
 
-  /* thin divider between today items and the rest */
-  .divider { border-top: 1px dashed var(--faint); margin: 6px var(--pad); }
+  #empty { padding: 40px var(--gutter); color: var(--muted); }
+  #empty b { display: block; color: var(--fg); font-weight: 650; margin-bottom: 4px; }
+  #err {
+    margin: 6px 6px 0; padding: 10px 12px; border-radius: 8px;
+    background: color-mix(in srgb, var(--err) 12%, var(--bg)); color: var(--err); font-size: 14px;
+  }
 
-  #empty, #err { padding: 28px var(--pad); color: var(--muted); text-align: center; }
-  #err { color: var(--err); padding: 10px var(--pad); text-align: left; border-bottom: 1px solid var(--line); }
-
-  /* add box: a single line at the bottom */
+  /* add box: a pill above the safe area */
+  #foot { flex: none; padding: 6px var(--gutter) calc(10px + env(safe-area-inset-bottom)); position: relative; }
   #bar {
-    flex: none; display: flex; align-items: center; gap: 6px;
-    padding: 6px var(--pad) 6px calc(var(--pad) - 4px);
-    padding-bottom: calc(6px + env(safe-area-inset-bottom));
-    border-top: 1px solid var(--line);
+    display: flex; align-items: center; gap: 4px;
+    padding: 4px 6px 4px 6px; border-radius: 999px;
+    background: var(--row); border: 1.5px solid transparent;
+    transition: border-color .15s, background .15s;
   }
+  #bar:focus-within { border-color: var(--accent); background: var(--bg); }
   #plus {
-    flex: none; width: 30px; height: 30px; border-radius: 50%;
-    display: grid; place-items: center; color: var(--faint);
-    transition: color .12s;
+    flex: none; width: 34px; height: 34px; border-radius: 50%;
+    display: grid; place-items: center; color: var(--muted); transition: color .12s, transform .15s var(--ease);
   }
-  #plus svg { width: 18px; height: 18px; display: block; }
-  #bar:focus-within #plus { color: var(--accent); }
-  #new { flex: 1; font: inherit; color: var(--fg); background: none; border: 0; padding: 8px 0; min-width: 0; }
-  #new::placeholder { color: var(--faint); }
+  #plus svg { width: 20px; height: 20px; }
+  #plus path { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+  #bar:focus-within #plus { color: var(--accent); transform: rotate(90deg); }
+  #new { flex: 1; font: inherit; color: var(--fg); background: none; border: 0; padding: 6px 8px 6px 0; min-width: 0; }
+  #new::placeholder { color: var(--muted); }
   #new:focus { outline: none; }
+
+  /* one line that answers an action, with a way back */
+  #toast {
+    position: absolute; left: 50%; bottom: calc(100% + 2px); transform: translate(-50%, 6px);
+    display: flex; align-items: center; gap: 14px; white-space: nowrap;
+    padding: 9px 8px 9px 14px; border-radius: 999px;
+    background: var(--fg); color: var(--bg); font-size: 14px; font-weight: 500;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .18);
+    opacity: 0; pointer-events: none; transition: opacity .18s, transform .22s var(--ease);
+  }
+  #toast.show { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+  #toast button { color: var(--accent); font-weight: 650; padding: 2px 8px; border-radius: 999px; }
 
   /* keyboard help, toggled with ? */
   #help {
-    position: absolute; left: var(--pad); right: var(--pad); bottom: 52px;
-    background: var(--bg); border: 1px solid var(--line); padding: 12px 14px;
-    display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; font-size: 0.93em;
-    box-shadow: 0 6px 24px rgba(0,0,0,0.12);
+    position: absolute; left: var(--gutter); right: var(--gutter); bottom: 64px; z-index: 2;
+    background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px;
+    display: grid; grid-template-columns: auto 1fr; gap: 5px 16px; font-size: 14px;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.14);
   }
-  #help kbd { font: inherit; color: var(--muted); text-align: right; }
+  #help kbd { font: inherit; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
 
   /* sign-in */
-  #login { padding: 40px 20px; display: flex; flex-direction: column; gap: 10px; max-width: 360px; }
+  #login { padding: calc(40px + env(safe-area-inset-top)) 20px; display: flex; flex-direction: column; gap: 10px; max-width: 360px; }
+  #login h1 { font-size: 27px; font-weight: 750; font-variation-settings: "wdth" 68; letter-spacing: -0.01em; margin-bottom: 6px; }
   #login input {
-    font: inherit; padding: 10px 12px; border: 1px solid var(--line); background: none; color: var(--fg);
+    font: inherit; padding: 10px 12px; border: 1.5px solid var(--line); border-radius: 8px; background: none; color: var(--fg);
   }
-  #login button { padding: 10px 16px; background: var(--accent); color: #fff; }
-  #login .msg { color: var(--err); min-height: 1.4em; }
+  #login input:focus { border-color: var(--accent); outline: none; }
+  #login button { padding: 11px 16px; border-radius: 8px; background: var(--fg); color: var(--bg); font-weight: 600; }
+  #login .msg { color: var(--err); min-height: 1.4em; font-size: 14px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { transition: none !important; animation: none !important; }
+  }
 </style>
 </head>
 <body>
 
 <div id="app" hidden>
-  <div id="tabs"></div>
+  <div id="head"><div id="tabs"></div><div id="count"></div></div>
   <div id="list"></div>
-  <form id="bar">
-    <button type="submit" id="plus" aria-label="Add" title="Add">
-      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-        <path d="M10 4v12M4 10h12"/>
-      </svg>
-    </button>
-    <input id="new" placeholder="Add a todo" autocomplete="off" enterkeyhint="done">
-  </form>
+  <div id="foot">
+    <div id="toast" role="status"><span id="toastmsg"></span><button type="button" id="undo">Undo</button></div>
+    <form id="bar">
+      <button type="submit" id="plus" aria-label="Add" title="Add">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 4v12M4 10h12"/></svg>
+      </button>
+      <input id="new" placeholder="New todo" autocomplete="off" enterkeyhint="done">
+    </form>
+  </div>
   <div id="help" hidden>
     <kbd>j k ↑ ↓</kbd><span>move</span>
     <kbd>h l tab 1–9</kbd><span>switch list</span>
     <kbd>a</kbd><span>add</span>
     <kbd>e ↵</kbd><span>edit</span>
     <kbd>t</kbd><span>flag for today</span>
-    <kbd>d</kbd><span>done / undone</span>
+    <kbd>d</kbd><span>done / not done</span>
+    <kbd>x ⌫</kbd><span>delete</span>
+    <kbd>u</kbd><span>undo the last done or delete</span>
     <kbd>C D</kbd><span>assign (MOVE list)</span>
     <kbd>U</kbd><span>unassign</span>
     <kbd>r</kbd><span>refresh</span>
@@ -207,7 +281,7 @@
   </div>
 </div>
 <form id="login" hidden>
-  <div>Sign in to your todos</div>
+  <h1>TODO</h1>
   <input id="email" type="email" placeholder="email" autocomplete="username">
   <input id="password" type="password" placeholder="password" autocomplete="current-password">
   <button>Sign in</button>
@@ -230,6 +304,13 @@
 
   // The one list that tracks who does what, with C / D bubbles per row.
   var ASSIGNEE_LIST = "MOVE";
+  var ICON = {
+    check: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4.5 10.5l3.8 3.8L15.5 6.5"/></svg>',
+    star: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.6l2.3 4.9 5.3.7-3.9 3.7.9 5.3L10 14.7l-4.6 2.5.9-5.3L2.4 8.2l5.3-.7z"/></svg>',
+    chev: '<svg viewBox="0 0 8 8" aria-hidden="true"><path d="M1.5 3l2.5 2.5L6.5 3"/></svg>',
+    trash: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 6h12M8 6V4h4v2M6 6l.8 10h6.4L14 6"/></svg>'
+  };
+  var MOTION = !(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
 
   // tabs: {list name: [{id, text, today, assignee, done_at}, ...]} — from cache on open
   var tabs = store.get("todo-cache", {}), current = store.get("todo-tab", null);
@@ -239,14 +320,18 @@
   var sel = null;       // the item keys act on: the last one clicked or moved to
   var keyNav = false;   // the selection is only painted once the keyboard is in use
   var shown = [];       // items of the current tab in display order (open, then completed)
-  var rows = {};        // item -> its row element, for the current paint
+  var rows = {};        // item index -> its row element, for the current paint
 
   var app = document.getElementById("app"),
       login = document.getElementById("login"),
       tabsEl = document.getElementById("tabs"),
+      countEl = document.getElementById("count"),
       listEl = document.getElementById("list"),
       newEl = document.getElementById("new"),
-      helpEl = document.getElementById("help");
+      helpEl = document.getElementById("help"),
+      toastEl = document.getElementById("toast"),
+      toastMsg = document.getElementById("toastmsg"),
+      undoBtn = document.getElementById("undo");
 
   // ---- auth
 
@@ -368,10 +453,10 @@
   // Nothing is repainted under an open edit: the row being typed in would
   // lose focus, and a tap on another row would land on a moved element.
   // The paint runs once the edit ends.
-  var dirty = false, pendingFresh = null;
+  var dirty = false, pendingFresh = null, animating = 0;
 
   function render(fresh) {
-    if (editing) { dirty = true; if (fresh) pendingFresh = fresh; return; }
+    if (editing || animating) { dirty = true; if (fresh) pendingFresh = fresh; return; }
     if (fresh) tabs = fresh;
     store.set("todo-cache", tabs);
     var names = Object.keys(tabs);
@@ -402,12 +487,17 @@
     });
     shown = doneOpen ? items.concat(done) : items;
     sel = keepSelection(shown);
-    if (!all.length) listEl.innerHTML = '<div id="empty">Nothing here. Add one below.</div>';
+    countEl.textContent = items.length ? items.length + " open" : "";
+    if (!all.length) {
+      listEl.innerHTML = '<div id="empty"><b>Nothing here yet.</b>Add the first one below.</div>';
+    } else if (!items.length) {
+      listEl.innerHTML = '<div id="empty"><b>All done.</b>Add the next one below.</div>';
+    }
     var todayCount = items.filter(function (x) { return x.today; }).length;
     items.forEach(function (it, idx) {
       if (idx === todayCount && todayCount > 0) {
-        var div = document.createElement("div"); div.className = "divider";
-        listEl.appendChild(div);
+        var gap = document.createElement("div"); gap.className = "gap";
+        listEl.appendChild(gap);
       }
       listEl.appendChild(row(it));
     });
@@ -420,10 +510,7 @@
   function doneHeader(n) {
     var b = document.createElement("button");
     b.id = "donehdr"; b.className = doneOpen ? "" : "closed";
-    var chev = document.createElement("span");
-    chev.className = "chev"; chev.textContent = "▾";
-    b.appendChild(chev);
-    b.appendChild(document.createTextNode("Completed (" + n + ")"));
+    b.innerHTML = '<span class="chev">' + ICON.chev + '</span>Completed <span class="n">' + n + '</span>';
     b.onclick = function () {
       endEdit(false);
       doneOpen = !doneOpen; store.set("todo-done-open", doneOpen); render();
@@ -435,9 +522,13 @@
     var el = document.createElement("div");
     el.className = "item" + (it === sel && keyNav ? " sel" : "") + (it.today ? " today" : "")
                  + (it.done_at ? " done" : "");
+    el.innerHTML = '<div class="under do">' + ICON.check + '</div><div class="under rm">' + ICON.trash + '</div>';
+    var r = document.createElement("div");
+    r.className = "row";
     var tick = document.createElement("button");
     var label = it.done_at ? "Not done" : "Done";
     tick.className = "tick"; tick.title = label; tick.setAttribute("aria-label", label);
+    tick.innerHTML = '<span class="fill"></span>' + ICON.check;
     tick.onclick = function () { complete(it); };
     var span = document.createElement("span");
     span.className = "txt";
@@ -446,17 +537,20 @@
     star.className = "star"; star.title = "Today";
     star.setAttribute("aria-label", "Today");
     star.setAttribute("aria-pressed", it.today ? "true" : "false");
-    star.textContent = it.today ? "★" : "☆";
+    star.innerHTML = ICON.star;
     star.onclick = function () { toggleToday(it); };
     // the whole row edits, except the buttons sitting in it
-    el.onclick = function (ev) {
+    r.onclick = function (ev) {
+      if (el.swiped) { el.swiped = false; return; }
       if (ev.target.closest && ev.target.closest("button")) return;
       select(it);
       startEdit(it, el, span);
     };
-    el.appendChild(tick); el.appendChild(span);
-    if (current === ASSIGNEE_LIST) el.appendChild(bubbles(it));
-    el.appendChild(star);
+    r.appendChild(tick); r.appendChild(span);
+    if (current === ASSIGNEE_LIST) r.appendChild(bubbles(it));
+    r.appendChild(star);
+    el.appendChild(r);
+    swipeable(el, r, it);
     rows[shown.indexOf(it)] = el;
     return el;
   }
@@ -490,20 +584,125 @@
     if (el) { el.classList.add("sel"); el.scrollIntoView({ block: "nearest" }); }
   }
 
-  // ---- actions, shared by mouse and keyboard
+  // Drag a row sideways: right completes, left deletes. Vertical movement
+  // is left to the scroller (touch-action: pan-y).
+  var SWIPE = 72;
+  function swipeable(el, r, it) {
+    var x0, y0, dx, active = false, decided = false;
+    r.addEventListener("pointerdown", function (ev) {
+      if (ev.button !== 0 || editing || (ev.target.closest && ev.target.closest("button"))) return;
+      x0 = ev.clientX; y0 = ev.clientY; dx = 0; active = true; decided = false;
+    });
+    r.addEventListener("pointermove", function (ev) {
+      if (!active) return;
+      dx = ev.clientX - x0;
+      var dy = ev.clientY - y0;
+      if (!decided) {
+        if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+        if (Math.abs(dx) < Math.abs(dy) * 1.5) { active = false; return; }  // a scroll
+        decided = true;
+        el.classList.add("swiping");
+        try { r.setPointerCapture(ev.pointerId); } catch (e) {}
+      }
+      if (it.done_at && dx > 0) dx = dx / 3;   // a done row only deletes
+      el.classList.toggle("swipe-r", dx > 8);
+      el.classList.toggle("swipe-l", dx < -8);
+      r.style.transform = "translateX(" + dx + "px)";
+    });
+    function finish(ev) {
+      if (!active) return;
+      active = false;
+      if (!decided) return;
+      el.classList.remove("swiping");
+      el.swiped = true;   // the click that follows is not a tap on the row
+      if (dx > SWIPE && !it.done_at) { r.style.transform = ""; complete(it); return; }
+      if (dx < -SWIPE) { r.style.transform = "translateX(-110%)"; remove(it, true); return; }
+      r.style.transform = "";
+      el.classList.remove("swipe-r", "swipe-l");
+    }
+    r.addEventListener("pointerup", finish);
+    r.addEventListener("pointercancel", finish);
+  }
+
+  // ---- actions, shared by mouse, touch and keyboard
+
+  // One line for what just happened, with a way back. `u` or the button
+  // runs the undo; the next action or five seconds clears it.
+  var toastTimer = null, undoFn = null;
+  function toast(msg, undo) {
+    toastMsg.textContent = msg;
+    undoFn = undo;
+    undoBtn.hidden = !undo;
+    toastEl.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(hideToast, 5000);
+  }
+  function hideToast() { toastEl.classList.remove("show"); undoFn = null; }
+  function undo() {
+    var fn = undoFn;
+    hideToast();
+    if (fn) fn();
+  }
+  undoBtn.onclick = undo;
+  undoBtn.onmousedown = function (ev) { ev.preventDefault(); };
+
+  // Fold a row away, then repaint. Repaints are held while a row animates,
+  // so a write settling early cannot cut the motion short.
+  function fold(el, then) {
+    el.style.height = el.offsetHeight + "px";
+    requestAnimationFrame(function () { el.classList.add("out"); });
+    setTimeout(then, 240);
+  }
+  function settle() {
+    animating--;
+    var fresh = pendingFresh;
+    dirty = false; pendingFresh = null;
+    render(fresh);
+  }
 
   // Ticking does not delete: done_at is stamped and the item drops into the
   // Completed section, where ticking again brings it back.
-  function complete(it) {
+  function complete(it, quiet) {
     endEdit(false);
+    hideToast();
     var el = rowEl(it);
-    if (el) el.classList.add("out");
-    it.done_at = it.done_at ? null : new Date().toISOString();
-    // the item still exists, it only moves section, so the selection stays
-    // with it — pressing d again undoes the tick. If it lands in a collapsed
-    // Completed section, render drops the selection instead.
-    setTimeout(render, el ? 150 : 0);
+    var wasDone = !!it.done_at;
+    it.done_at = wasDone ? null : new Date().toISOString();
     write(patch(it, { done_at: it.done_at }));
+    if (wasDone || !el || !MOTION) { render(); return; }
+    // the tick lands first, then the row folds into the Completed section
+    animating++;
+    el.classList.add("ticking");
+    setTimeout(function () {
+      fold(el, function () {
+        settle();
+        if (!quiet) toast("Done", function () { if (it.done_at) complete(it, true); });
+      });
+    }, 480);
+  }
+
+  // Deleting is final on the server, so the way back re-creates the item.
+  function remove(it, animated) {
+    endEdit(false);
+    hideToast();
+    var el = rowEl(it);
+    var copy = { list: current, text: it.text, today: it.today, assignee: it.assignee, done_at: it.done_at };
+    tabs[current] = (tabs[current] || []).filter(function (x) { return x !== it; });
+    write(byId(it).then(function (id) {
+      return rest("todos?id=eq." + id, { method: "DELETE", prefer: "return=minimal" });
+    }));
+    var after = function () { toast("Deleted", function () { restore(copy); }); };
+    if (animated && el && MOTION) { animating++; fold(el, function () { settle(); after(); }); }
+    else { render(); after(); }
+  }
+
+  function restore(copy) {
+    var it = { id: null, text: copy.text, today: copy.today, assignee: copy.assignee, done_at: copy.done_at };
+    tabs[copy.list] = (tabs[copy.list] || []).concat([it]);
+    render();
+    it.saving = rest("todos", { method: "POST", body: copy, prefer: "return=representation" })
+      .then(function (rows) { it.saving = null; if (rows && rows[0]) it.id = rows[0].id; });
+    write(it.saving);
   }
 
   function assign(it, who) {
@@ -640,12 +839,16 @@
       case "e": case "Enter": if (sel) startEdit(sel, rowEl(sel), rowEl(sel).querySelector(".txt")); break;
       case "t": if (sel) toggleToday(sel); break;
       case "d": if (sel) complete(sel); break;
+      case "x": case "Backspace": case "Delete":
+        if (sel) { var next = shown[shown.indexOf(sel) + 1] || shown[shown.indexOf(sel) - 1]; remove(sel); select(next || null); }
+        break;
+      case "u": undo(); break;
       case "C": case "D": if (sel && current === ASSIGNEE_LIST) assign(sel, ev.key); break;
       case "U": if (sel && current === ASSIGNEE_LIST && sel.assignee) assign(sel, sel.assignee); break;
       case "r": refresh(); break;
       case "o": window.open(TABLE_URL, "_blank"); break;
       case "?": helpEl.hidden = !helpEl.hidden; break;
-      case "Escape": select(null); break;
+      case "Escape": select(null); hideToast(); break;
       default:
         if (ev.key >= "1" && ev.key <= "9") {
           var n = Object.keys(tabs)[+ev.key - 1];
