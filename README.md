@@ -25,6 +25,11 @@ signed-in user at the rows.
 - The list names across the top are the tabs; the count of open items
   sits at the right. The add box at the bottom keeps the keyboard up
   after Enter or `+`, so several items go in one after the other.
+  Leaving the box with something typed adds it too: on iOS the toolbar
+  above the keyboard cannot be hidden by a web app, and its ✓ only
+  closes the keyboard, so it may as well finish the item. Escape leaves
+  the box and keeps the text. While the keyboard is up the app is sized
+  to the visible part of the screen, so the box sits on the keyboard.
 - Writes are optimistic and settle on the next fetch; nothing fetched is
   painted while a write is in flight or an edit is open. Refresh on
   foreground and every 2 minutes; the last state is painted from

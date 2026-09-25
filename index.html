@@ -195,6 +195,7 @@
 
   /* add box: a pill above the safe area */
   #foot { flex: none; padding: 6px var(--gutter) calc(10px + env(safe-area-inset-bottom)); position: relative; }
+  body.kb #foot { padding-bottom: 8px; }   /* the keyboard covers the home indicator */
   #bar {
     display: flex; align-items: center; gap: 4px;
     padding: 4px 6px 4px 6px; border-radius: 999px;
@@ -260,7 +261,7 @@
       <button type="submit" id="plus" aria-label="Add" title="Add">
         <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 4v12M4 10h12"/></svg>
       </button>
-      <input id="new" placeholder="New todo" autocomplete="off" enterkeyhint="done">
+      <input id="new" placeholder="New todo" autocomplete="off" enterkeyhint="enter">
     </form>
   </div>
   <div id="help" hidden>
@@ -823,7 +824,7 @@
   document.addEventListener("keydown", function (ev) {
     if (!session) return;
     if (ev.target === newEl) {
-      if (ev.key === "Escape") { newEl.blur(); ev.preventDefault(); }
+      if (ev.key === "Escape") { keepTyped = true; newEl.blur(); ev.preventDefault(); }
       return;
     }
     if (ev.target.isContentEditable) return;
@@ -867,13 +868,18 @@
     if (old) old.classList.remove("sel");
   });
 
-  document.getElementById("bar").onsubmit = function (ev) {
-    ev.preventDefault();
+  function submitNew() {
     var text = newEl.value.trim();
     if (!text || !current) return;
     newEl.value = "";
     add(text);
-  };
+  }
+  document.getElementById("bar").onsubmit = function (ev) { ev.preventDefault(); submitNew(); };
+  // Leaving the box with something typed adds it: on iOS the keyboard's
+  // own ✓ only closes the keyboard, and that is what people tap to finish.
+  // Escape leaves the box without adding.
+  var keepTyped = false;
+  newEl.onblur = function () { if (keepTyped) { keepTyped = false; return; } submitNew(); };
   // clicking + keeps typing in the box
   document.getElementById("plus").onmousedown = function (ev) { ev.preventDefault(); };
 
@@ -896,6 +902,21 @@
     refresh();
   }
   boot();
+
+  // On a phone the page does not shrink when the keyboard opens (in
+  // home-screen mode the layout viewport keeps its height), so the app is
+  // sized to the visible part by hand: the add box then sits on the keyboard.
+  var vv = window.visualViewport;
+  if (vv) {
+    var fit = function () {
+      var kb = window.innerHeight - vv.height > 120;
+      document.body.classList.toggle("kb", kb);
+      document.body.style.height = kb ? vv.height + "px" : "";
+      if (kb && (window.scrollY || vv.offsetTop)) window.scrollTo(0, 0);
+    };
+    vv.addEventListener("resize", fit);
+    vv.addEventListener("scroll", fit);
+  }
 
   // refresh when brought back to the foreground, and every 2 minutes while visible
   document.addEventListener("visibilitychange", function () {

@@ -51,6 +51,21 @@ test("adding from the bar keeps the keyboard in the box", async ({ page }) => {
   expect(m.posts().length).toBe(3);
 });
 
+test("leaving the box with text in it adds the item; escape keeps the text", async ({ page }) => {
+  await act(page.locator("#new"));
+  await page.keyboard.type("Typed then left");
+  await page.evaluate(() => document.getElementById("new").blur());   // what the keyboard's ✓ does
+  await expect(page.locator(".item", { hasText: "Typed then left" })).toHaveCount(1);
+  await expect(page.locator("#new")).toHaveValue("");
+  await act(page.locator("#new"));
+  await page.keyboard.type("Half an idea");
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#new")).not.toBeFocused();
+  await expect(page.locator("#new")).toHaveValue("Half an idea");
+  await settle(page);
+  expect(m.posts().map((c) => c.body.text)).toEqual(["Typed then left"]);
+});
+
 test("editing an item straight after adding it patches the right id", async ({ page }) => {
   m.delays.POST = 400;   // the insert is still on its way when the edit lands
   await act(page.locator("#new"));
