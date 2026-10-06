@@ -904,18 +904,25 @@
   boot();
 
   // On a phone the page does not shrink when the keyboard opens (in
-  // home-screen mode the layout viewport keeps its height), so the app is
-  // sized to the visible part by hand: the add box then sits on the keyboard.
+  // home-screen mode the layout viewport keeps its height), and iOS pans
+  // the page about to keep the caret in view - on focus, and again after
+  // keystrokes. Scrolling that back (as this used to) made iOS pan again
+  // on the next key: the list jumped on every keystroke and keys were
+  // lost in the fight. So the app follows the visual viewport instead:
+  // sized to the visible part and moved along with the pan, nothing on
+  // screen moves and the add box sits on the keyboard.
   var vv = window.visualViewport;
   if (vv) {
     var fit = function () {
       var kb = window.innerHeight - vv.height > 120;
       document.body.classList.toggle("kb", kb);
       document.body.style.height = kb ? vv.height + "px" : "";
-      if (kb && (window.scrollY || vv.offsetTop)) window.scrollTo(0, 0);
+      var top = kb ? Math.round(vv.offsetTop + window.scrollY) : 0;
+      document.body.style.transform = top ? "translateY(" + top + "px)" : "";
     };
     vv.addEventListener("resize", fit);
     vv.addEventListener("scroll", fit);
+    window.addEventListener("scroll", fit);
   }
 
   // refresh when brought back to the foreground, and every 2 minutes while visible
