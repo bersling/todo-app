@@ -23,7 +23,10 @@ signed-in user at the rows.
 - Tap the star to flag for today. Today items sit on top, bold, with a
   gap below them; everything else is alphabetical (ä sorts as a).
 - The list names across the top are the tabs; the count of open items
-  sits at the right. The add box at the bottom keeps the keyboard up
+  sits at the right. Only the lists at `position` 0–99 are pinned there;
+  the rest (100 and up) sit in a menu behind one last tab, which reads
+  the name of the one that is open, or just a chevron. `h`/`l`/`tab` and
+  the digits walk through them all the same. The add box at the bottom keeps the keyboard up
   after Enter or `+`, so several items go in one after the other.
   Leaving the box with something typed adds it too: on iOS the toolbar
   above the keyboard cannot be hidden by a web app, and its ✓ only
@@ -41,7 +44,8 @@ signed-in user at the rows.
   cut for the list names); offline it falls back to the system font.
 
 Works as a desktop pane too (a narrow window): the TUI's keys are wired up —
-`j`/`k` move, `h`/`l`/`tab`/`1`-`9` switch list, `a` add, `e`/`enter` edit
+`j`/`k` move, `h`/`l`/`tab`/`1`-`9` switch list, `m` the menu of the other
+lists, `a` add, `e`/`enter` edit
 in place, `t` today, `d` done/undone, `x`/`⌫` delete, `u` undo the last
 done or delete, `C`/`D` assign and `U` unassign (on MOVE), `r` refresh,
 `o` open the table, `?` shows the list. The selection bar only shows

@@ -21,13 +21,46 @@ const settle = (page) => page.waitForTimeout(250);
 const doneCount = (page) => page.locator("#donehdr .n");
 
 test("lists, order and the completed section", async ({ page }) => {
-  await expect(page.locator("#tabs button")).toHaveText(["INBOX", "MOVE"]);
+  await expect(page.locator("#tabs button:not(.more)")).toHaveText(["INBOX", "MOVE"]);
   await expect(page.locator("#tabs button.on")).toHaveText("INBOX");
   expect(await texts(page)).toEqual(OPEN);
   await expect(page.locator(".item.today .txt")).toHaveText("Zebra first (today)");
   await expect(doneCount(page)).toHaveText("1");
   await expect(page.locator(".item.done .txt")).toHaveText("Old done thing");
   await expect(page.locator("#count")).toHaveText("4 open");
+});
+
+test("lists past the pinned ones sit in a menu behind the last tab", async ({ page }) => {
+  const more = page.locator("#tabs button.more"), menu = page.locator("#menu");
+  await expect(more).toHaveText("");
+  await expect(menu).toBeHidden();
+  await act(more);
+  await expect(menu).toBeVisible();
+  await expect(menu.locator("button")).toHaveText(["IKEA"]);
+  await act(menu.locator("button", { hasText: "IKEA" }));
+  await expect(menu).toBeHidden();
+  await expect(more).toHaveText("IKEA");
+  await expect(page.locator("#tabs button.on")).toHaveCount(1);
+  await expect(page.locator("#tabs button.on")).toHaveText("IKEA");
+  await expect(page.locator(".item .txt")).toHaveText(["KALLAX 2x4"]);
+  await expect(page.locator("#count")).toHaveText("1 open");
+  // the menu lists the open one as current, and the shade closes it
+  await act(more);
+  await expect(menu.locator("button.on")).toHaveText("IKEA");
+  await act(page.locator("#shade"));
+  await expect(menu).toBeHidden();
+  // the keys walk through it like any other list
+  await page.keyboard.press("l");
+  await expect(page.locator("#tabs button.on")).toHaveText("INBOX");
+  await page.keyboard.press("h");
+  await expect(more).toHaveText("IKEA");
+  await page.keyboard.press("2");
+  await expect(page.locator("#tabs button.on")).toHaveText("MOVE");
+  await expect(more).toHaveText("");
+  await page.keyboard.press("m");
+  await expect(menu).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(menu).toBeHidden();
 });
 
 test("adding from the bar keeps the keyboard in the box", async ({ page }) => {
@@ -317,6 +350,10 @@ test("swipe right completes, swipe left deletes", async ({ page }) => {
 
 test("screenshots for a look", async ({ page }, info) => {
   await page.screenshot({ path: `shots/${info.project.name}-light.png` });
+  await act(page.locator("#tabs button.more"));
+  await page.waitForTimeout(200);   // the chevron turns
+  await page.screenshot({ path: `shots/${info.project.name}-menu.png` });
+  await act(page.locator("#shade"));
   await page.emulateMedia({ colorScheme: "dark" });
   await page.waitForTimeout(300);   // let the colour transitions finish
   await page.screenshot({ path: `shots/${info.project.name}-dark.png` });

@@ -5,7 +5,8 @@ const SUPABASE = "https://wpfstejpyuetuqmayipa.supabase.co";
 
 function seed() {
   return {
-    lists: [{ name: "INBOX" }, { name: "MOVE" }],
+    // INBOX and MOVE are pinned across the top; IKEA (position 100+) sits in the menu
+    lists: [{ name: "INBOX", position: 0 }, { name: "MOVE", position: 1 }, { name: "IKEA", position: 100 }],
     todos: [
       { id: "b1", list: "INBOX", text: "Buy milk", today: false, assignee: null, done_at: null, position: 1 },
       { id: "a1", list: "INBOX", text: "Ärger melden", today: false, assignee: null, done_at: null, position: 2 },
@@ -14,6 +15,7 @@ function seed() {
       { id: "d1", list: "INBOX", text: "Old done thing", today: false, assignee: null, done_at: "2026-09-01T10:00:00Z", position: 5 },
       { id: "m1", list: "MOVE", text: "Pack books", today: false, assignee: "C", done_at: null, position: 6 },
       { id: "m2", list: "MOVE", text: "Sell sofa", today: false, assignee: null, done_at: null, position: 7 },
+      { id: "i1", list: "IKEA", text: "KALLAX 2x4", today: false, assignee: null, done_at: null, position: 8 },
     ],
   };
 }

@@ -64,6 +64,25 @@
   }
   #tabs button + button { margin-left: 4px; }
   #tabs button.on { color: var(--fg); }
+  /* Lists past the pinned ones share one last tab: it reads the name of
+     the extra list that is open, or is just a chevron, and opens a menu. */
+  #tabs button.more { display: inline-flex; align-items: center; gap: 5px; min-width: 30px; justify-content: center; }
+  #tabs button.more .chev { width: 14px; height: 14px; margin-top: 2px; color: var(--muted); transition: transform .15s var(--ease); }
+  #tabs button.more.on .chev { color: var(--fg); }
+  #tabs button.more .chev path { fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+  #tabs button.more.open .chev { transform: rotate(180deg); }
+  #shade { position: absolute; inset: 0; z-index: 2; }
+  #menu {
+    position: absolute; z-index: 3; min-width: 150px; padding: 6px;
+    background: var(--bg); border: 1px solid var(--line); border-radius: 12px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, .14);
+  }
+  #menu button {
+    display: block; width: 100%; text-align: left; padding: 8px 12px; border-radius: 8px;
+    font-size: 21px; line-height: 1.1; font-weight: 750; letter-spacing: -0.01em;
+    font-variation-settings: "wdth" 68; color: var(--muted); white-space: nowrap;
+  }
+  #menu button.on { color: var(--fg); }
   #count {
     margin-left: auto; padding-left: 12px; color: var(--muted);
     font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap;
@@ -164,6 +183,7 @@
   @media (hover: hover) {
     #tabs button:hover { color: var(--muted); }
     #tabs button.on:hover { color: var(--fg); }
+    #menu button:hover { background: var(--row); color: var(--fg); }
     .item:hover .row { background: var(--row); }
     .item:hover .star { opacity: 1; }
     .star:hover { color: var(--star); transform: scale(1.12); }
@@ -254,6 +274,8 @@
 
 <div id="app" hidden>
   <div id="head"><div id="tabs"></div><div id="count"></div></div>
+  <div id="shade" hidden></div>
+  <div id="menu" role="menu" hidden></div>
   <div id="list"></div>
   <div id="foot">
     <div id="toast" role="status"><span id="toastmsg"></span><button type="button" id="undo">Undo</button></div>
@@ -267,6 +289,7 @@
   <div id="help" hidden>
     <kbd>j k ↑ ↓</kbd><span>move</span>
     <kbd>h l tab 1–9</kbd><span>switch list</span>
+    <kbd>m</kbd><span>the other lists</span>
     <kbd>a</kbd><span>add</span>
     <kbd>e ↵</kbd><span>edit</span>
     <kbd>t</kbd><span>flag for today</span>
@@ -305,6 +328,10 @@
 
   // The one list that tracks who does what, with C / D bubbles per row.
   var ASSIGNEE_LIST = "MOVE";
+  // Lists at this position and up are not pinned across the top: they sit
+  // behind the last tab, in a menu. `lists` has no pinned flag — the
+  // position carries it, so a new list is placed by one number.
+  var MORE_FROM = 100;
   var ICON = {
     check: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4.5 10.5l3.8 3.8L15.5 6.5"/></svg>',
     star: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.6l2.3 4.9 5.3.7-3.9 3.7.9 5.3L10 14.7l-4.6 2.5.9-5.3L2.4 8.2l5.3-.7z"/></svg>',
@@ -315,6 +342,8 @@
 
   // tabs: {list name: [{id, text, today, assignee, done_at}, ...]} — from cache on open
   var tabs = store.get("todo-cache", {}), current = store.get("todo-tab", null);
+  var more = store.get("todo-more", []);   // names of the lists in the menu, in order
+  var extra = [];                          // of those, the ones that exist, as of the last paint
   var doneOpen = store.get("todo-done-open", true);
   var session = store.get("todo-session", null);
   var editing = null;   // {it, end} while an item is edited in place, else null
@@ -328,6 +357,8 @@
       tabsEl = document.getElementById("tabs"),
       countEl = document.getElementById("count"),
       listEl = document.getElementById("list"),
+      menuEl = document.getElementById("menu"),
+      shadeEl = document.getElementById("shade"),
       newEl = document.getElementById("new"),
       helpEl = document.getElementById("help"),
       toastEl = document.getElementById("toast"),
@@ -395,11 +426,15 @@
 
   function list() {
     return Promise.all([
-      rest("lists?select=name&order=position,name"),
+      rest("lists?select=name,position&order=position,name"),
       rest("todos?select=id,list,text,today,assignee,done_at&order=position,created_at")
     ]).then(function (res) {
       var fresh = {};
       res[0].forEach(function (l) { fresh[l.name] = []; });
+      // which lists sit in the menu is metadata, not something a write
+      // touches, so it is taken as it comes
+      more = res[0].filter(function (l) { return l.position >= MORE_FROM; }).map(function (l) { return l.name; });
+      store.set("todo-more", more);
       res[1].forEach(function (r) {
         (fresh[r.list] = fresh[r.list] || []).push({
           id: r.id, text: r.text, today: r.today, assignee: r.assignee, done_at: r.done_at });
@@ -465,13 +500,26 @@
     store.set("todo-tab", current);
 
     tabsEl.innerHTML = "";
+    extra = names.filter(function (n) { return more.indexOf(n) >= 0; });
     names.forEach(function (n) {
+      if (extra.indexOf(n) >= 0) return;
       var b = document.createElement("button");
       b.textContent = n;
       b.className = n === current ? "on" : "";
       b.onclick = function () { switchTab(n); };
       tabsEl.appendChild(b);
     });
+    if (extra.length) {
+      var mb = document.createElement("button"), onMore = extra.indexOf(current) >= 0;
+      mb.className = "more" + (onMore ? " on" : "");
+      mb.setAttribute("aria-haspopup", "menu");
+      mb.setAttribute("aria-label", "Other lists");
+      if (onMore) mb.appendChild(document.createTextNode(current));
+      mb.insertAdjacentHTML("beforeend", ICON.chev.replace("<svg", '<svg class="chev"'));
+      mb.onclick = function () { if (menuEl.hidden) openMenu(); else closeMenu(); };
+      tabsEl.appendChild(mb);
+    }
+    if (!menuEl.hidden) { if (extra.length) openMenu(); else closeMenu(); }
 
     listEl.innerHTML = "";
     rows = {};
@@ -744,9 +792,39 @@
 
   function switchTab(n) {
     endEdit(false);
+    closeMenu();
     if (n === current) return;
     current = n; sel = null; render();
   }
+
+  // The menu of the lists that are not pinned, under the last tab. A shade
+  // behind it catches the tap that closes it.
+  function openMenu() {
+    var anchor = tabsEl.querySelector(".more");
+    if (!anchor) return;
+    menuEl.innerHTML = "";
+    extra.forEach(function (n) {
+      var b = document.createElement("button");
+      b.textContent = n;
+      b.setAttribute("role", "menuitem");
+      b.className = n === current ? "on" : "";
+      b.onclick = function () { switchTab(n); };
+      menuEl.appendChild(b);
+    });
+    anchor.classList.add("open");
+    anchor.setAttribute("aria-expanded", "true");
+    menuEl.hidden = false; shadeEl.hidden = false;
+    var a = anchor.getBoundingClientRect(), box = app.getBoundingClientRect();
+    menuEl.style.top = (a.bottom - box.top + 2) + "px";
+    menuEl.style.left = Math.max(6, Math.min(a.left - box.left - 6, box.width - menuEl.offsetWidth - 6)) + "px";
+  }
+  function closeMenu() {
+    if (menuEl.hidden) return;
+    menuEl.hidden = true; shadeEl.hidden = true;
+    var anchor = tabsEl.querySelector(".more");
+    if (anchor) { anchor.classList.remove("open"); anchor.removeAttribute("aria-expanded"); }
+  }
+  shadeEl.onclick = closeMenu;
 
   // Edit in place: the text itself becomes editable. Enter, or tapping or
   // clicking anywhere else, saves; Escape puts the old text back. The row
@@ -836,6 +914,7 @@
       case "k": case "ArrowUp": move(-1); break;
       case "l": case "Tab": moveTab(ev.shiftKey ? -1 : 1); break;
       case "h": moveTab(-1); break;
+      case "m": if (extra.length) { if (menuEl.hidden) openMenu(); else closeMenu(); } break;
       case "a": newEl.focus(); break;
       case "e": case "Enter": if (sel) startEdit(sel, rowEl(sel), rowEl(sel).querySelector(".txt")); break;
       case "t": if (sel) toggleToday(sel); break;
@@ -849,7 +928,7 @@
       case "r": refresh(); break;
       case "o": window.open(TABLE_URL, "_blank"); break;
       case "?": helpEl.hidden = !helpEl.hidden; break;
-      case "Escape": select(null); hideToast(); break;
+      case "Escape": if (!menuEl.hidden) closeMenu(); else { select(null); hideToast(); } break;
       default:
         if (ev.key >= "1" && ev.key <= "9") {
           var n = Object.keys(tabs)[+ev.key - 1];
