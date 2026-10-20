@@ -46,6 +46,7 @@ async function mock(page, opts = {}) {
     const json = (data, status = 200) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(data) });
     const q = url.searchParams;
 
+    if (path === "lists" && method === "POST") { db.lists.push(body); return json([body], 201); }
     if (path === "lists") return json(db.lists);
     if (path === "todos" && method === "GET") {
       let rows = db.todos.slice();

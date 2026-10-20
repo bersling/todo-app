@@ -83,6 +83,14 @@
     font-variation-settings: "wdth" 68; color: var(--muted); white-space: nowrap;
   }
   #menu button.on { color: var(--fg); }
+  #menu .new { font-size: 14px; font-weight: 500; font-variation-settings: "wdth" 100; letter-spacing: 0; padding: 9px 12px; }
+  #menu input {
+    display: block; width: 100%; margin: 2px 0; padding: 7px 12px; border-radius: 8px;
+    font: inherit; font-size: 15px; color: var(--fg); background: var(--row); border: 1.5px solid transparent;
+    text-transform: uppercase;
+  }
+  #menu input:focus { outline: none; border-color: var(--accent); }
+  #menu input::placeholder { color: var(--muted); text-transform: none; }
   #count {
     margin-left: auto; padding-left: 12px; color: var(--muted);
     font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap;
@@ -290,6 +298,7 @@
     <kbd>j k ↑ ↓</kbd><span>move</span>
     <kbd>h l tab 1–9</kbd><span>switch list</span>
     <kbd>m</kbd><span>the other lists</span>
+    <kbd>n</kbd><span>new list</span>
     <kbd>a</kbd><span>add</span>
     <kbd>e ↵</kbd><span>edit</span>
     <kbd>t</kbd><span>flag for today</span>
@@ -343,6 +352,7 @@
   // tabs: {list name: [{id, text, today, assignee, done_at}, ...]} — from cache on open
   var tabs = store.get("todo-cache", {}), current = store.get("todo-tab", null);
   var more = store.get("todo-more", []);   // names of the lists in the menu, in order
+  var positions = store.get("todo-positions", {});   // list name -> position, for placing a new one
   var extra = [];                          // of those, the ones that exist, as of the last paint
   var doneOpen = store.get("todo-done-open", true);
   var session = store.get("todo-session", null);
@@ -435,6 +445,9 @@
       // touches, so it is taken as it comes
       more = res[0].filter(function (l) { return l.position >= MORE_FROM; }).map(function (l) { return l.name; });
       store.set("todo-more", more);
+      positions = {};
+      res[0].forEach(function (l) { positions[l.name] = l.position; });
+      store.set("todo-positions", positions);
       res[1].forEach(function (r) {
         (fresh[r.list] = fresh[r.list] || []).push({
           id: r.id, text: r.text, today: r.today, assignee: r.assignee, done_at: r.done_at });
@@ -509,7 +522,7 @@
       b.onclick = function () { switchTab(n); };
       tabsEl.appendChild(b);
     });
-    if (extra.length) {
+    if (names.length) {
       var mb = document.createElement("button"), onMore = extra.indexOf(current) >= 0;
       mb.className = "more" + (onMore ? " on" : "");
       mb.setAttribute("aria-haspopup", "menu");
@@ -519,7 +532,7 @@
       mb.onclick = function () { if (menuEl.hidden) openMenu(); else closeMenu(); };
       tabsEl.appendChild(mb);
     }
-    if (!menuEl.hidden) { if (extra.length) openMenu(); else closeMenu(); }
+    if (!menuEl.hidden) { if (names.length) openMenu(); else closeMenu(); }
 
     listEl.innerHTML = "";
     rows = {};
@@ -811,6 +824,11 @@
       b.onclick = function () { switchTab(n); };
       menuEl.appendChild(b);
     });
+    var nb = document.createElement("button");
+    nb.className = "new"; nb.textContent = "+ New list";
+    nb.setAttribute("role", "menuitem");
+    nb.onclick = function () { askNewList(nb); };
+    menuEl.appendChild(nb);
     anchor.classList.add("open");
     anchor.setAttribute("aria-expanded", "true");
     menuEl.hidden = false; shadeEl.hidden = false;
@@ -825,6 +843,42 @@
     if (anchor) { anchor.classList.remove("open"); anchor.removeAttribute("aria-expanded"); }
   }
   shadeEl.onclick = closeMenu;
+
+  // The "+ New list" row turns into a box for the name. Enter adds the
+  // list and opens it; Escape, or leaving the box, puts the row back.
+  function askNewList(row) {
+    var box = document.createElement("input");
+    box.placeholder = "Name"; box.autocomplete = "off"; box.enterKeyHint = "done";
+    box.setAttribute("aria-label", "New list name");
+    row.replaceWith(box);
+    box.focus();
+    var done = false;
+    function back() { if (done) return; done = true; box.replaceWith(row); }
+    box.onkeydown = function (ev) {
+      ev.stopPropagation();
+      if (ev.key === "Escape") { ev.preventDefault(); back(); }
+      if (ev.key === "Enter") {
+        ev.preventDefault();
+        var name = box.value.trim().toUpperCase();
+        if (!name) { back(); return; }
+        done = true;
+        if (tabs[name]) { switchTab(name); return; }
+        addList(name);
+      }
+    };
+    box.onblur = function () { setTimeout(back, 0); };
+  }
+
+  // A new list goes behind the last tab: after the last one there, or at
+  // MORE_FROM when there is none yet.
+  function addList(name) {
+    var pos = MORE_FROM;
+    more.forEach(function (n) { if (positions[n] >= pos) pos = positions[n] + 1; });
+    tabs[name] = []; more = more.concat([name]); positions[name] = pos;
+    current = name; sel = null;
+    closeMenu(); render();
+    write(rest("lists", { method: "POST", body: { name: name, position: pos }, prefer: "return=minimal" }));
+  }
 
   // Edit in place: the text itself becomes editable. Enter, or tapping or
   // clicking anywhere else, saves; Escape puts the old text back. The row
@@ -914,7 +968,8 @@
       case "k": case "ArrowUp": move(-1); break;
       case "l": case "Tab": moveTab(ev.shiftKey ? -1 : 1); break;
       case "h": moveTab(-1); break;
-      case "m": if (extra.length) { if (menuEl.hidden) openMenu(); else closeMenu(); } break;
+      case "m": if (menuEl.hidden) openMenu(); else closeMenu(); break;
+      case "n": openMenu(); askNewList(menuEl.querySelector(".new")); break;
       case "a": newEl.focus(); break;
       case "e": case "Enter": if (sel) startEdit(sel, rowEl(sel), rowEl(sel).querySelector(".txt")); break;
       case "t": if (sel) toggleToday(sel); break;

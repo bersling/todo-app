@@ -36,7 +36,7 @@ test("lists past the pinned ones sit in a menu behind the last tab", async ({ pa
   await expect(menu).toBeHidden();
   await act(more);
   await expect(menu).toBeVisible();
-  await expect(menu.locator("button")).toHaveText(["IKEA"]);
+  await expect(menu.locator("button")).toHaveText(["IKEA", "+ New list"]);
   await act(menu.locator("button", { hasText: "IKEA" }));
   await expect(menu).toBeHidden();
   await expect(more).toHaveText("IKEA");
@@ -61,6 +61,37 @@ test("lists past the pinned ones sit in a menu behind the last tab", async ({ pa
   await expect(menu).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(menu).toBeHidden();
+});
+
+test("a new list is added from the menu and lands behind the last tab", async ({ page }) => {
+  const more = page.locator("#tabs button.more"), menu = page.locator("#menu");
+  await act(more);
+  await act(menu.locator("button.new"));
+  const box = menu.locator("input");
+  await expect(box).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(box).toHaveCount(0);
+  await expect(menu.locator("button.new")).toBeVisible();
+  await act(menu.locator("button.new"));
+  await page.keyboard.type("garden");
+  await page.keyboard.press("Enter");
+  await expect(menu).toBeHidden();
+  await expect(more).toHaveText("GARDEN");
+  await expect(page.locator("#tabs button:not(.more)")).toHaveText(["INBOX", "MOVE"]);
+  await expect(page.locator("#empty")).toContainText("Nothing here yet");
+  await settle(page);
+  expect(m.posts().map((c) => [c.path, c.body])).toEqual([["lists", { name: "GARDEN", position: 101 }]]);
+  await act(more);
+  await expect(menu.locator("button")).toHaveText(["IKEA", "GARDEN", "+ New list"]);
+  await expect(menu.locator("button.on")).toHaveText("GARDEN");
+  await act(page.locator("#shade"));
+  // an existing name just opens that list
+  await page.keyboard.press("n");
+  await page.keyboard.type("ikea");
+  await page.keyboard.press("Enter");
+  await expect(more).toHaveText("IKEA");
+  await settle(page);
+  expect(m.posts()).toHaveLength(1);
 });
 
 test("adding from the bar keeps the keyboard in the box", async ({ page }) => {

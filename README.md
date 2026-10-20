@@ -26,7 +26,9 @@ signed-in user at the rows.
   sits at the right. Only the lists at `position` 0–99 are pinned there;
   the rest (100 and up) sit in a menu behind one last tab, which reads
   the name of the one that is open, or just a chevron. `h`/`l`/`tab` and
-  the digits walk through them all the same. The add box at the bottom keeps the keyboard up
+  the digits walk through them all the same. **+ New list** at the foot
+  of that menu adds a list (name typed, Enter), placed behind the last tab
+  and opened right away; `n` does the same from the keyboard. The add box at the bottom keeps the keyboard up
   after Enter or `+`, so several items go in one after the other.
   Leaving the box with something typed adds it too: on iOS the toolbar
   above the keyboard cannot be hidden by a web app, and its ✓ only
@@ -45,7 +47,7 @@ signed-in user at the rows.
 
 Works as a desktop pane too (a narrow window): the TUI's keys are wired up —
 `j`/`k` move, `h`/`l`/`tab`/`1`-`9` switch list, `m` the menu of the other
-lists, `a` add, `e`/`enter` edit
+lists, `n` new list, `a` add, `e`/`enter` edit
 in place, `t` today, `d` done/undone, `x`/`⌫` delete, `u` undo the last
 done or delete, `C`/`D` assign and `U` unassign (on MOVE), `r` refresh,
 `o` open the table, `?` shows the list. The selection bar only shows
